@@ -78,6 +78,8 @@ async function networkRequest(url: URL, secure: boolean): Promise<string> {
   return body;
 }
 
+// Registry of known strategies, consulted only by parseUrl() below — URL
+// itself never looks a strategy up, it just holds whichever one it's given.
 const SCHEMES: SchemeStrategy[] = [
   {
     name: 'data',
@@ -109,34 +111,26 @@ const SCHEMES: SchemeStrategy[] = [
 ];
 
 // Note: this shadows Node's built-in global URL inside any module that imports it.
+// The Context in the Strategy pattern: it just holds a strategy and defers
+// to it, it never chooses one — that's parseUrl()'s job.
 export class URL {
-  scheme: string;
   host: string;
-  port: number = 0;
+  port: number;
   path: string;
-  private readonly strategy: SchemeStrategy;
 
-  constructor(url: string) {
-    let rest: string | undefined;
-    const strategy = SCHEMES.find((s) => (rest = s.match(url)) !== undefined);
-    if (!strategy || rest === undefined) {
-      const [scheme] = split1(url, '://');
-      throw new Error(`unsupported scheme: ${scheme}`);
-    }
-    this.strategy = strategy;
-    this.scheme = strategy.name;
+  constructor(
+    private readonly strategy: SchemeStrategy,
+    host: string,
+    port: number,
+    path: string,
+  ) {
+    this.host = host;
+    this.port = port;
+    this.path = path;
+  }
 
-    if (!rest.includes('/')) rest = rest + '/';
-    [this.host, rest] = split1(rest, '/');
-    this.path = '/' + rest;
-
-    this.port = strategy.defaultPort;
-
-    if (this.host.includes(':')) {
-      let port: string;
-      [this.host, port] = split1(this.host, ':');
-      this.port = Number.parseInt(port, 10);
-    }
+  get scheme(): string {
+    return this.strategy.name;
   }
 
   async openFile(): Promise<string> {
@@ -148,6 +142,32 @@ export class URL {
   async request(): Promise<string> {
     return this.strategy.request(this);
   }
+}
+
+// Factory: the only place that knows how to go from a raw string to a
+// strategy. Everything scheme-specific happens here or inside a strategy;
+// URL above stays generic.
+export function parseUrl(url: string): URL {
+  let rest: string | undefined;
+  const strategy = SCHEMES.find((s) => (rest = s.match(url)) !== undefined);
+  if (!strategy || rest === undefined) {
+    const [scheme] = split1(url, '://');
+    throw new Error(`unsupported scheme: ${scheme}`);
+  }
+
+  if (!rest.includes('/')) rest = rest + '/';
+  let host: string;
+  [host, rest] = split1(rest, '/');
+  const path = '/' + rest;
+
+  let port = strategy.defaultPort;
+  if (host.includes(':')) {
+    let portStr: string;
+    [host, portStr] = split1(host, ':');
+    port = Number.parseInt(portStr, 10);
+  }
+
+  return new URL(strategy, host, port, path);
 }
 
 // Chapter 1's show(): print the page text with the tags stripped out.

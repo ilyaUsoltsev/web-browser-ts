@@ -5,7 +5,7 @@
 //   npm start                                  open https://example.org/
 
 import { Browser } from './browser.ts';
-import { URL, load } from './url.ts';
+import { parseUrl, load } from './url.ts';
 
 const defaultFilePath = 'data:text/html,<b>Hello world!</b>';
 // const defaultFilePath = 'file:///Users/ilyau/Desktop/web-browser-ts/index.html';
@@ -17,9 +17,9 @@ const textMode = args[0] === '--text';
 const target = (textMode ? args[1] : args[0]) ?? defaultFilePath;
 
 if (textMode) {
-  await load(new URL(target));
+  await load(parseUrl(target));
 } else {
   // No tkinter.mainloop() needed: opening a Window starts skia-canvas's event
   // loop automatically, and Node keeps running until the window is closed.
-  await new Browser().load(new URL(target));
+  await new Browser().load(parseUrl(target));
 }
