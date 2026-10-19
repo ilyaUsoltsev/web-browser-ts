@@ -8,7 +8,8 @@ import * as tls from "node:tls";
 // JS's "a:b:c".split(":", 2) gives ["a", "b"] and drops the rest, so we can't use it.
 function split1(s: string, sep: string): [string, string] {
   const i = s.indexOf(sep);
-  if (i === -1) throw new Error(`expected ${JSON.stringify(sep)} in ${JSON.stringify(s)}`);
+  if (i === -1)
+    throw new Error(`expected ${JSON.stringify(sep)} in ${JSON.stringify(s)}`);
   return [s.slice(0, i), s.slice(i + sep.length)];
 }
 
@@ -63,7 +64,11 @@ export class URL {
     // `servername` sets SNI, which servers hosting many sites need.
     const s: net.Socket =
       this.scheme === "https"
-        ? tls.connect({ host: this.host, port: this.port, servername: this.host })
+        ? tls.connect({
+            host: this.host,
+            port: this.port,
+            servername: this.host,
+          })
         : net.connect({ host: this.host, port: this.port });
 
     // Attach listeners before writing so no data or error event can be missed.
@@ -83,7 +88,9 @@ export class URL {
 
     // Like the book, we parse these but don't use them yet.
     const [version, rest] = split1(statusline, " ");
-    const [status, explanation] = rest.includes(" ") ? split1(rest, " ") : [rest, ""];
+    const [status, explanation] = rest.includes(" ")
+      ? split1(rest, " ")
+      : [rest, ""];
 
     const responseHeaders = new Map<string, string>();
     for (const line of headerLines) {
@@ -92,8 +99,10 @@ export class URL {
       responseHeaders.set(header.toLowerCase(), value.trim());
     }
 
-    if (responseHeaders.has("transfer-encoding")) throw new Error("transfer-encoding not supported");
-    if (responseHeaders.has("content-encoding")) throw new Error("content-encoding not supported");
+    if (responseHeaders.has("transfer-encoding"))
+      throw new Error("transfer-encoding not supported");
+    if (responseHeaders.has("content-encoding"))
+      throw new Error("content-encoding not supported");
 
     s.destroy();
     return body;
@@ -105,7 +114,7 @@ export class URL {
 export function show(body: string): void {
   let inTag = false;
   let out = "";
-  for (const c of body) { // for...of iterates by code point, like Python's str
+  for (const c of body) {
     if (c === "<") {
       inTag = true;
     } else if (c === ">") {
