@@ -1,11 +1,6 @@
-// Chapter 1: Downloading Web Pages
-// https://browser.engineering/http.html
-
 import * as net from 'node:net';
 import * as tls from 'node:tls';
 
-// Python's str.split(sep, 1): split on the first occurrence only.
-// JS's "a:b:c".split(":", 2) gives ["a", "b"] and drops the rest, so we can't use it.
 function split1(s: string, sep: string): [string, string] {
   const i = s.indexOf(sep);
   if (i === -1)
@@ -13,11 +8,6 @@ function split1(s: string, sep: string): [string, string] {
   return [s.slice(0, i), s.slice(i + sep.length)];
 }
 
-// Python's socket.makefile() gives a blocking file you can read() to EOF.
-// Node sockets are event-based instead, so we collect "data" chunks as raw
-// bytes and resolve once the server closes the connection ("end"). Decoding
-// only after concatenating matters: a chunk boundary can fall in the middle
-// of a multi-byte UTF-8 character.
 function readAll(s: net.Socket): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
@@ -27,35 +17,120 @@ function readAll(s: net.Socket): Promise<Buffer> {
   });
 }
 
+interface SchemeStrategy {
+  readonly name: string;
+  readonly defaultPort: number;
+  // Returns the part of the url after the scheme prefix, or undefined if
+  // this strategy doesn't own that prefix.
+  match(url: string): string | undefined;
+  request(url: URL): Promise<string>;
+}
+
+function matchSchemePrefix(url: string, scheme: string): string | undefined {
+  const prefix = `${scheme}://`;
+  return url.startsWith(prefix) ? url.slice(prefix.length) : undefined;
+}
+
+// tls.connect plays the role of ssl's ctx.wrap_socket(s, server_hostname=host).
+// `servername` sets SNI, which servers hosting many sites need.
+async function networkRequest(url: URL, secure: boolean): Promise<string> {
+  const s: net.Socket = secure
+    ? tls.connect({ host: url.host, port: url.port, servername: url.host })
+    : net.connect({ host: url.host, port: url.port });
+
+  // Attach listeners before writing so no data or error event can be missed.
+  const received = readAll(s);
+
+  let request = `GET ${url.path} HTTP/1.1\r\n`;
+  request += `Connection: close\r\n`;
+  request += `User-Agent: web-browser-ts/1.0\r\n`;
+  request += `Host: ${url.host}\r\n`;
+  request += '\r\n';
+  s.write(request, 'utf8'); // Node buffers this until the connection is up
+
+  const response = (await received).toString('utf8');
+
+  // Python reads line by line with readline(); here we have the whole
+  // response already, so we split the head from the body ourselves.
+  const [head, body] = split1(response, '\r\n\r\n');
+  const [statusline = '', ...headerLines] = head.split('\r\n');
+
+  // Like the book, we parse these but don't use them yet.
+  const [version, rest] = split1(statusline, ' ');
+  const [status, explanation] = rest.includes(' ')
+    ? split1(rest, ' ')
+    : [rest, ''];
+
+  const responseHeaders = new Map<string, string>();
+  for (const line of headerLines) {
+    const [header, value] = split1(line, ':');
+    // Python's casefold() ≈ toLowerCase() for ASCII header names.
+    responseHeaders.set(header.toLowerCase(), value.trim());
+  }
+
+  if (responseHeaders.has('transfer-encoding'))
+    // Retry with HTTP/1.0?
+    throw new Error('transfer-encoding not supported');
+  if (responseHeaders.has('content-encoding'))
+    throw new Error('content-encoding not supported');
+
+  s.destroy();
+  return body;
+}
+
+const SCHEMES: SchemeStrategy[] = [
+  {
+    name: 'data',
+    defaultPort: 0,
+    match: (url) =>
+      url.startsWith('data:') ? url.slice('data:'.length) : undefined,
+    request: (url) => {
+      return Promise.resolve(url.path.split(',')[1] ?? '<p>No data</p>');
+    },
+  },
+  {
+    name: 'http',
+    defaultPort: 80,
+    match: (url) => matchSchemePrefix(url, 'http'),
+    request: (url) => networkRequest(url, false),
+  },
+  {
+    name: 'https',
+    defaultPort: 443,
+    match: (url) => matchSchemePrefix(url, 'https'),
+    request: (url) => networkRequest(url, true),
+  },
+  {
+    name: 'file',
+    defaultPort: 0, // file URLs don't use a network port
+    match: (url) => matchSchemePrefix(url, 'file'),
+    request: (url) => url.openFile(),
+  },
+];
+
 // Note: this shadows Node's built-in global URL inside any module that imports it.
 export class URL {
   scheme: string;
   host: string;
   port: number = 0;
   path: string;
+  private readonly strategy: SchemeStrategy;
 
   constructor(url: string) {
-    let rest: string;
-    [this.scheme, rest] = split1(url, '://');
-    if (
-      this.scheme !== 'http' &&
-      this.scheme !== 'https' &&
-      this.scheme !== 'file'
-    ) {
-      throw new Error(`unsupported scheme: ${this.scheme}`);
+    let rest: string | undefined;
+    const strategy = SCHEMES.find((s) => (rest = s.match(url)) !== undefined);
+    if (!strategy || rest === undefined) {
+      const [scheme] = split1(url, '://');
+      throw new Error(`unsupported scheme: ${scheme}`);
     }
+    this.strategy = strategy;
+    this.scheme = strategy.name;
 
     if (!rest.includes('/')) rest = rest + '/';
     [this.host, rest] = split1(rest, '/');
     this.path = '/' + rest;
 
-    if (this.scheme === 'http') {
-      this.port = 80;
-    } else if (this.scheme === 'https') {
-      this.port = 443;
-    } else if (this.scheme === 'file') {
-      this.port = 0; // file URLs don't use a network port
-    }
+    this.port = strategy.defaultPort;
 
     if (this.host.includes(':')) {
       let port: string;
@@ -71,58 +146,7 @@ export class URL {
 
   // async because socket I/O in Node can't block; callers must await it.
   async request(): Promise<string> {
-    if (this.scheme === 'file') {
-      return await this.openFile();
-    }
-    // tls.connect plays the role of ssl's ctx.wrap_socket(s, server_hostname=host).
-    // `servername` sets SNI, which servers hosting many sites need.
-    const s: net.Socket =
-      this.scheme === 'https'
-        ? tls.connect({
-            host: this.host,
-            port: this.port,
-            servername: this.host,
-          })
-        : net.connect({ host: this.host, port: this.port });
-
-    // Attach listeners before writing so no data or error event can be missed.
-    const received = readAll(s);
-
-    let request = `GET ${this.path} HTTP/1.1\r\n`;
-    request += `Connection: close\r\n`;
-    request += `User-Agent: web-browser-ts/1.0\r\n`;
-    request += `Host: ${this.host}\r\n`;
-    request += '\r\n';
-    s.write(request, 'utf8'); // Node buffers this until the connection is up
-
-    const response = (await received).toString('utf8');
-
-    // Python reads line by line with readline(); here we have the whole
-    // response already, so we split the head from the body ourselves.
-    const [head, body] = split1(response, '\r\n\r\n');
-    const [statusline = '', ...headerLines] = head.split('\r\n');
-
-    // Like the book, we parse these but don't use them yet.
-    const [version, rest] = split1(statusline, ' ');
-    const [status, explanation] = rest.includes(' ')
-      ? split1(rest, ' ')
-      : [rest, ''];
-
-    const responseHeaders = new Map<string, string>();
-    for (const line of headerLines) {
-      const [header, value] = split1(line, ':');
-      // Python's casefold() ≈ toLowerCase() for ASCII header names.
-      responseHeaders.set(header.toLowerCase(), value.trim());
-    }
-
-    if (responseHeaders.has('transfer-encoding'))
-      // Retry with HTTP/1.0?
-      throw new Error('transfer-encoding not supported');
-    if (responseHeaders.has('content-encoding'))
-      throw new Error('content-encoding not supported');
-
-    s.destroy();
-    return body;
+    return this.strategy.request(this);
   }
 }
 

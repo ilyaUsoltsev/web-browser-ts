@@ -7,7 +7,8 @@
 import { Browser } from './browser.ts';
 import { URL, load } from './url.ts';
 
-const defaultFilePath = 'file:///Users/ilyau/Desktop/web-browser-ts/index.html';
+const defaultFilePath = 'data:text/html,<b>Hello world!</b>';
+// const defaultFilePath = 'file:///Users/ilyau/Desktop/web-browser-ts/index.html';
 
 const args = process.argv.slice(2);
 const textMode = args[0] === '--text';
