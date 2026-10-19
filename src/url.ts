@@ -1,8 +1,8 @@
 // Chapter 1: Downloading Web Pages
 // https://browser.engineering/http.html
 
-import * as net from "node:net";
-import * as tls from "node:tls";
+import * as net from 'node:net';
+import * as tls from 'node:tls';
 
 // Python's str.split(sep, 1): split on the first occurrence only.
 // JS's "a:b:c".split(":", 2) gives ["a", "b"] and drops the rest, so we can't use it.
@@ -21,9 +21,9 @@ function split1(s: string, sep: string): [string, string] {
 function readAll(s: net.Socket): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
-    s.on("data", (chunk: Buffer) => chunks.push(chunk));
-    s.on("end", () => resolve(Buffer.concat(chunks)));
-    s.on("error", reject);
+    s.on('data', (chunk: Buffer) => chunks.push(chunk));
+    s.on('end', () => resolve(Buffer.concat(chunks)));
+    s.on('error', reject);
   });
 }
 
@@ -31,39 +31,53 @@ function readAll(s: net.Socket): Promise<Buffer> {
 export class URL {
   scheme: string;
   host: string;
-  port: number;
+  port: number = 0;
   path: string;
 
   constructor(url: string) {
     let rest: string;
-    [this.scheme, rest] = split1(url, "://");
-    if (this.scheme !== "http" && this.scheme !== "https") {
+    [this.scheme, rest] = split1(url, '://');
+    if (
+      this.scheme !== 'http' &&
+      this.scheme !== 'https' &&
+      this.scheme !== 'file'
+    ) {
       throw new Error(`unsupported scheme: ${this.scheme}`);
     }
 
-    if (!rest.includes("/")) rest = rest + "/";
-    [this.host, rest] = split1(rest, "/");
-    this.path = "/" + rest;
+    if (!rest.includes('/')) rest = rest + '/';
+    [this.host, rest] = split1(rest, '/');
+    this.path = '/' + rest;
 
-    if (this.scheme === "http") {
+    if (this.scheme === 'http') {
       this.port = 80;
-    } else {
+    } else if (this.scheme === 'https') {
       this.port = 443;
+    } else if (this.scheme === 'file') {
+      this.port = 0; // file URLs don't use a network port
     }
 
-    if (this.host.includes(":")) {
+    if (this.host.includes(':')) {
       let port: string;
-      [this.host, port] = split1(this.host, ":");
+      [this.host, port] = split1(this.host, ':');
       this.port = Number.parseInt(port, 10);
     }
   }
 
+  async openFile(): Promise<string> {
+    const fs = await import('fs/promises');
+    return await fs.readFile(this.path, 'utf8');
+  }
+
   // async because socket I/O in Node can't block; callers must await it.
   async request(): Promise<string> {
+    if (this.scheme === 'file') {
+      return await this.openFile();
+    }
     // tls.connect plays the role of ssl's ctx.wrap_socket(s, server_hostname=host).
     // `servername` sets SNI, which servers hosting many sites need.
     const s: net.Socket =
-      this.scheme === "https"
+      this.scheme === 'https'
         ? tls.connect({
             host: this.host,
             port: this.port,
@@ -74,35 +88,38 @@ export class URL {
     // Attach listeners before writing so no data or error event can be missed.
     const received = readAll(s);
 
-    let request = `GET ${this.path} HTTP/1.0\r\n`;
+    let request = `GET ${this.path} HTTP/1.1\r\n`;
+    request += `Connection: close\r\n`;
+    request += `User-Agent: web-browser-ts/1.0\r\n`;
     request += `Host: ${this.host}\r\n`;
-    request += "\r\n";
-    s.write(request, "utf8"); // Node buffers this until the connection is up
+    request += '\r\n';
+    s.write(request, 'utf8'); // Node buffers this until the connection is up
 
-    const response = (await received).toString("utf8");
+    const response = (await received).toString('utf8');
 
     // Python reads line by line with readline(); here we have the whole
     // response already, so we split the head from the body ourselves.
-    const [head, body] = split1(response, "\r\n\r\n");
-    const [statusline = "", ...headerLines] = head.split("\r\n");
+    const [head, body] = split1(response, '\r\n\r\n');
+    const [statusline = '', ...headerLines] = head.split('\r\n');
 
     // Like the book, we parse these but don't use them yet.
-    const [version, rest] = split1(statusline, " ");
-    const [status, explanation] = rest.includes(" ")
-      ? split1(rest, " ")
-      : [rest, ""];
+    const [version, rest] = split1(statusline, ' ');
+    const [status, explanation] = rest.includes(' ')
+      ? split1(rest, ' ')
+      : [rest, ''];
 
     const responseHeaders = new Map<string, string>();
     for (const line of headerLines) {
-      const [header, value] = split1(line, ":");
+      const [header, value] = split1(line, ':');
       // Python's casefold() ≈ toLowerCase() for ASCII header names.
       responseHeaders.set(header.toLowerCase(), value.trim());
     }
 
-    if (responseHeaders.has("transfer-encoding"))
-      throw new Error("transfer-encoding not supported");
-    if (responseHeaders.has("content-encoding"))
-      throw new Error("content-encoding not supported");
+    if (responseHeaders.has('transfer-encoding'))
+      // Retry with HTTP/1.0?
+      throw new Error('transfer-encoding not supported');
+    if (responseHeaders.has('content-encoding'))
+      throw new Error('content-encoding not supported');
 
     s.destroy();
     return body;
@@ -113,11 +130,11 @@ export class URL {
 // (Chapter 2 turns this into lex() in browser.ts, which returns the text instead.)
 export function show(body: string): void {
   let inTag = false;
-  let out = "";
+  let out = '';
   for (const c of body) {
-    if (c === "<") {
+    if (c === '<') {
       inTag = true;
-    } else if (c === ">") {
+    } else if (c === '>') {
       inTag = false;
     } else if (!inTag) {
       out += c;
