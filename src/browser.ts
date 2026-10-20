@@ -49,13 +49,13 @@ export class Browser {
   }
 
   async load(url: URL): Promise<void> {
-    const { body, skipParsing } = await url.request();
-    if (!skipParsing) {
+    const body = await url.request();
+    if (url.skipParsing) {
+      this.displayList = layout(body);
+    } else {
       const parser = new Parser(body);
       parser.process();
       this.displayList = layout(parser.result);
-    } else {
-      this.displayList = layout(body);
     }
     this.draw();
   }

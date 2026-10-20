@@ -23,18 +23,12 @@ interface SchemeStrategy {
   // Returns the part of the url after the scheme prefix, or undefined if
   // this strategy doesn't own that prefix.
   match(url: string): string | undefined;
-  request(url: URL): Promise<{ body: string; skipParsing: boolean }>;
+  request(url: URL): Promise<string>;
 }
 
 function matchSchemePrefix(url: string, scheme: string): string | undefined {
   const prefix = `${scheme}://`;
   return url.startsWith(prefix) ? url.slice(prefix.length) : undefined;
-}
-
-function matchViewSource(url: string): string | undefined {
-  return url.startsWith("view-source:")
-    ? url.slice("view-source:".length)
-    : undefined;
 }
 
 // tls.connect plays the role of ssl's ctx.wrap_socket(s, server_hostname=host).
@@ -84,7 +78,7 @@ async function networkRequest(
     throw new Error("content-encoding not supported");
 
   s.destroy();
-  return { body, skipParsing: url.scheme === "view-source" };
+  return body;
 }
 
 // Registry of known strategies, consulted only by parseUrl() below — URL
@@ -96,10 +90,7 @@ const SCHEMES: SchemeStrategy[] = [
     match: (url) =>
       url.startsWith("data:") ? url.slice("data:".length) : undefined,
     request: (url) => {
-      return Promise.resolve({
-        body: url.path.split(",")[1] ?? "<p>No data</p>",
-        skipParsing: false,
-      });
+      return Promise.resolve(url.path.split(",")[1] ?? "<p>No data</p>");
     },
   },
   {
@@ -118,14 +109,7 @@ const SCHEMES: SchemeStrategy[] = [
     name: "file",
     defaultPort: 0, // file URLs don't use a network port
     match: (url) => matchSchemePrefix(url, "file"),
-    request: (url) =>
-      url.openFile().then((body) => ({ body, skipParsing: false })),
-  },
-  {
-    name: "view-source",
-    defaultPort: 0,
-    match: (url) => matchViewSource(url),
-    request: (url) => networkRequest(url, false),
+    request: (url) => url.openFile(),
   },
 ];
 
@@ -136,16 +120,19 @@ export class URL {
   host: string;
   port: number;
   path: string;
+  readonly skipParsing: boolean;
 
   constructor(
     private readonly strategy: SchemeStrategy,
     host: string,
     port: number,
     path: string,
+    skipParsing: boolean,
   ) {
     this.host = host;
     this.port = port;
     this.path = path;
+    this.skipParsing = skipParsing;
   }
 
   get scheme(): string {
@@ -158,7 +145,7 @@ export class URL {
   }
 
   // async because socket I/O in Node can't block; callers must await it.
-  async request(): Promise<{ body: string; skipParsing: boolean }> {
+  async request(): Promise<string> {
     return this.strategy.request(this);
   }
 }
@@ -168,6 +155,12 @@ export class URL {
 // URL above stays generic.
 export function parseUrl(url: string): URL {
   let rest: string | undefined;
+  let skipParsing = false;
+  if (url.startsWith("view-source:")) {
+    url = url.slice("view-source:".length);
+    skipParsing = true;
+  }
+
   const strategy = SCHEMES.find((s) => (rest = s.match(url)) !== undefined);
   if (!strategy || rest === undefined) {
     const [scheme] = split1(url, "://");
@@ -186,7 +179,7 @@ export function parseUrl(url: string): URL {
     port = Number.parseInt(portStr, 10);
   }
 
-  return new URL(strategy, host, port, path);
+  return new URL(strategy, host, port, path, skipParsing);
 }
 
 // Chapter 1's show(): print the page text with the tags stripped out.
@@ -208,8 +201,6 @@ export function show(body: string): void {
 }
 
 export async function load(url: URL): Promise<void> {
-  const { body, skipParsing } = await url.request();
-  if (!skipParsing) {
-    show(body);
-  }
+  const body = await url.request();
+  show(body);
 }

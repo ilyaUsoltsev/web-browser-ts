@@ -56,7 +56,7 @@ test("request() sends HTTP/1.1 with Connection, User-Agent and Host, and returns
   const { port, requestText } = await serve([
     Buffer.from("HTTP/1.0 200 OK\r\nContent-Type: text/html\r\n\r\n<p>Hi</p>"),
   ]);
-  const { body } = await parseUrl(`http://127.0.0.1:${port}/page`).request();
+  const body = await parseUrl(`http://127.0.0.1:${port}/page`).request();
   assert.equal(body, "<p>Hi</p>");
   assert.equal(
     await requestText,
@@ -69,11 +69,8 @@ test("request() decodes UTF-8 split across chunk boundaries", async () => {
   // Cut inside the 4-byte emoji.
   const cut = full.length - 2;
   const { port } = await serve([full.subarray(0, cut), full.subarray(cut)]);
-  const { body, skipParsing } = await parseUrl(
-    `http://127.0.0.1:${port}/`,
-  ).request();
+  const body = await parseUrl(`http://127.0.0.1:${port}/`).request();
   assert.equal(body, "hé€😀");
-  assert.equal(skipParsing, false);
 });
 
 test("request() rejects transfer-encoding (header names are case-insensitive)", async () => {
