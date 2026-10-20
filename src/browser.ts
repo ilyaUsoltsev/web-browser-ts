@@ -56,6 +56,14 @@ export class Browser {
         this.scrollup();
       }
     });
+
+    this.window.on("wheel", (e) => {
+      if (e.deltaY > 0) {
+        this.scrollup(SCROLL_STEP / 10);
+      } else if (e.deltaY < 0) {
+        this.scrolldown(SCROLL_STEP / 10);
+      }
+    });
   }
 
   async load(url: URL): Promise<void> {
@@ -94,13 +102,13 @@ export class Browser {
     }
   }
 
-  scrolldown(): void {
-    this.scroll += SCROLL_STEP;
+  scrolldown(step = SCROLL_STEP): void {
+    this.scroll += step;
     this.draw();
   }
 
-  scrollup(): void {
-    this.scroll -= SCROLL_STEP;
+  scrollup(step = SCROLL_STEP): void {
+    this.scroll -= step;
     if (this.scroll < 0) {
       this.scroll = 0;
     }
