@@ -23,7 +23,7 @@ interface SchemeStrategy {
   // Returns the part of the url after the scheme prefix, or undefined if
   // this strategy doesn't own that prefix.
   match(url: string): string | undefined;
-  request(url: URL): Promise<string>;
+  request(url: URL): Promise<{ body: string; skipParsing: boolean }>;
 }
 
 function matchSchemePrefix(url: string, scheme: string): string | undefined {
@@ -39,7 +39,10 @@ function matchViewSource(url: string): string | undefined {
 
 // tls.connect plays the role of ssl's ctx.wrap_socket(s, server_hostname=host).
 // `servername` sets SNI, which servers hosting many sites need.
-async function networkRequest(url: URL, secure: boolean): Promise<string> {
+async function networkRequest(
+  url: URL,
+  secure: boolean,
+): ReturnType<SchemeStrategy["request"]> {
   const s: net.Socket = secure
     ? tls.connect({ host: url.host, port: url.port, servername: url.host })
     : net.connect({ host: url.host, port: url.port });
@@ -81,7 +84,7 @@ async function networkRequest(url: URL, secure: boolean): Promise<string> {
     throw new Error("content-encoding not supported");
 
   s.destroy();
-  return body;
+  return { body, skipParsing: url.scheme === "view-source" };
 }
 
 // Registry of known strategies, consulted only by parseUrl() below — URL
@@ -93,7 +96,10 @@ const SCHEMES: SchemeStrategy[] = [
     match: (url) =>
       url.startsWith("data:") ? url.slice("data:".length) : undefined,
     request: (url) => {
-      return Promise.resolve(url.path.split(",")[1] ?? "<p>No data</p>");
+      return Promise.resolve({
+        body: url.path.split(",")[1] ?? "<p>No data</p>",
+        skipParsing: false,
+      });
     },
   },
   {
@@ -112,7 +118,8 @@ const SCHEMES: SchemeStrategy[] = [
     name: "file",
     defaultPort: 0, // file URLs don't use a network port
     match: (url) => matchSchemePrefix(url, "file"),
-    request: (url) => url.openFile(),
+    request: (url) =>
+      url.openFile().then((body) => ({ body, skipParsing: false })),
   },
   {
     name: "view-source",
@@ -151,7 +158,7 @@ export class URL {
   }
 
   // async because socket I/O in Node can't block; callers must await it.
-  async request(): Promise<string> {
+  async request(): Promise<{ body: string; skipParsing: boolean }> {
     return this.strategy.request(this);
   }
 }
@@ -201,6 +208,8 @@ export function show(body: string): void {
 }
 
 export async function load(url: URL): Promise<void> {
-  const body = await url.request();
-  show(body);
+  const { body, skipParsing } = await url.request();
+  if (!skipParsing) {
+    show(body);
+  }
 }

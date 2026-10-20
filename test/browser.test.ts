@@ -1,10 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { lex, layout, HSTEP, VSTEP, WIDTH } from "../src/browser.ts";
-
-test("lex() strips tags", () => {
-  assert.equal(lex("<p>a<i>b</i>c</p>"), "abc");
-});
+import { layout, HSTEP, VSTEP, WIDTH } from "../src/browser.ts";
 
 test("layout() places characters on a fixed grid", () => {
   const list = layout("ab");

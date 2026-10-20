@@ -32,7 +32,9 @@ test("rejects unsupported schemes", () => {
 
 // A one-shot local server: records the request, replies with `chunks` (written
 // separately so we exercise chunk boundaries), then closes the connection.
-async function serve(chunks: Buffer[]): Promise<{ port: number; requestText: Promise<string> }> {
+async function serve(
+  chunks: Buffer[],
+): Promise<{ port: number; requestText: Promise<string> }> {
   let gotRequest!: (s: string) => void;
   const requestText = new Promise<string>((r) => (gotRequest = r));
   const server = net.createServer((sock) => {
@@ -54,7 +56,7 @@ test("request() sends HTTP/1.1 with Connection, User-Agent and Host, and returns
   const { port, requestText } = await serve([
     Buffer.from("HTTP/1.0 200 OK\r\nContent-Type: text/html\r\n\r\n<p>Hi</p>"),
   ]);
-  const body = await parseUrl(`http://127.0.0.1:${port}/page`).request();
+  const { body } = await parseUrl(`http://127.0.0.1:${port}/page`).request();
   assert.equal(body, "<p>Hi</p>");
   assert.equal(
     await requestText,
@@ -67,18 +69,30 @@ test("request() decodes UTF-8 split across chunk boundaries", async () => {
   // Cut inside the 4-byte emoji.
   const cut = full.length - 2;
   const { port } = await serve([full.subarray(0, cut), full.subarray(cut)]);
-  const body = await parseUrl(`http://127.0.0.1:${port}/`).request();
+  const { body, skipParsing } = await parseUrl(
+    `http://127.0.0.1:${port}/`,
+  ).request();
   assert.equal(body, "hé€😀");
+  assert.equal(skipParsing, false);
 });
 
 test("request() rejects transfer-encoding (header names are case-insensitive)", async () => {
-  const { port } = await serve([Buffer.from("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n")]);
-  await assert.rejects(parseUrl(`http://127.0.0.1:${port}/`).request(), /transfer-encoding/);
+  const { port } = await serve([
+    Buffer.from("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n"),
+  ]);
+  await assert.rejects(
+    parseUrl(`http://127.0.0.1:${port}/`).request(),
+    /transfer-encoding/,
+  );
 });
 
 test("show() prints text with tags removed", (t) => {
   const written: string[] = [];
-  t.mock.method(process.stdout, "write", (s: string) => (written.push(s), true));
+  t.mock.method(
+    process.stdout,
+    "write",
+    (s: string) => (written.push(s), true),
+  );
   show("<html><body><p>Hello, <b>world</b>!</p></body></html>");
   t.mock.restoreAll();
   assert.equal(written.join(""), "Hello, world!");
