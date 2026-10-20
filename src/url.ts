@@ -1,5 +1,5 @@
-import * as net from 'node:net';
-import * as tls from 'node:tls';
+import * as net from "node:net";
+import * as tls from "node:tls";
 
 function split1(s: string, sep: string): [string, string] {
   const i = s.indexOf(sep);
@@ -11,9 +11,9 @@ function split1(s: string, sep: string): [string, string] {
 function readAll(s: net.Socket): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
-    s.on('data', (chunk: Buffer) => chunks.push(chunk));
-    s.on('end', () => resolve(Buffer.concat(chunks)));
-    s.on('error', reject);
+    s.on("data", (chunk: Buffer) => chunks.push(chunk));
+    s.on("end", () => resolve(Buffer.concat(chunks)));
+    s.on("error", reject);
   });
 }
 
@@ -31,6 +31,12 @@ function matchSchemePrefix(url: string, scheme: string): string | undefined {
   return url.startsWith(prefix) ? url.slice(prefix.length) : undefined;
 }
 
+function matchViewSource(url: string): string | undefined {
+  return url.startsWith("view-source:")
+    ? url.slice("view-source:".length)
+    : undefined;
+}
+
 // tls.connect plays the role of ssl's ctx.wrap_socket(s, server_hostname=host).
 // `servername` sets SNI, which servers hosting many sites need.
 async function networkRequest(url: URL, secure: boolean): Promise<string> {
@@ -45,34 +51,34 @@ async function networkRequest(url: URL, secure: boolean): Promise<string> {
   request += `Connection: close\r\n`;
   request += `User-Agent: web-browser-ts/1.0\r\n`;
   request += `Host: ${url.host}\r\n`;
-  request += '\r\n';
-  s.write(request, 'utf8'); // Node buffers this until the connection is up
+  request += "\r\n";
+  s.write(request, "utf8"); // Node buffers this until the connection is up
 
-  const response = (await received).toString('utf8');
+  const response = (await received).toString("utf8");
 
   // Python reads line by line with readline(); here we have the whole
   // response already, so we split the head from the body ourselves.
-  const [head, body] = split1(response, '\r\n\r\n');
-  const [statusline = '', ...headerLines] = head.split('\r\n');
+  const [head, body] = split1(response, "\r\n\r\n");
+  const [statusline = "", ...headerLines] = head.split("\r\n");
 
   // Like the book, we parse these but don't use them yet.
-  const [version, rest] = split1(statusline, ' ');
-  const [status, explanation] = rest.includes(' ')
-    ? split1(rest, ' ')
-    : [rest, ''];
+  const [version, rest] = split1(statusline, " ");
+  const [status, explanation] = rest.includes(" ")
+    ? split1(rest, " ")
+    : [rest, ""];
 
   const responseHeaders = new Map<string, string>();
   for (const line of headerLines) {
-    const [header, value] = split1(line, ':');
+    const [header, value] = split1(line, ":");
     // Python's casefold() ≈ toLowerCase() for ASCII header names.
     responseHeaders.set(header.toLowerCase(), value.trim());
   }
 
-  if (responseHeaders.has('transfer-encoding'))
+  if (responseHeaders.has("transfer-encoding"))
     // Retry with HTTP/1.0?
-    throw new Error('transfer-encoding not supported');
-  if (responseHeaders.has('content-encoding'))
-    throw new Error('content-encoding not supported');
+    throw new Error("transfer-encoding not supported");
+  if (responseHeaders.has("content-encoding"))
+    throw new Error("content-encoding not supported");
 
   s.destroy();
   return body;
@@ -82,31 +88,37 @@ async function networkRequest(url: URL, secure: boolean): Promise<string> {
 // itself never looks a strategy up, it just holds whichever one it's given.
 const SCHEMES: SchemeStrategy[] = [
   {
-    name: 'data',
+    name: "data",
     defaultPort: 0,
     match: (url) =>
-      url.startsWith('data:') ? url.slice('data:'.length) : undefined,
+      url.startsWith("data:") ? url.slice("data:".length) : undefined,
     request: (url) => {
-      return Promise.resolve(url.path.split(',')[1] ?? '<p>No data</p>');
+      return Promise.resolve(url.path.split(",")[1] ?? "<p>No data</p>");
     },
   },
   {
-    name: 'http',
+    name: "http",
     defaultPort: 80,
-    match: (url) => matchSchemePrefix(url, 'http'),
+    match: (url) => matchSchemePrefix(url, "http"),
     request: (url) => networkRequest(url, false),
   },
   {
-    name: 'https',
+    name: "https",
     defaultPort: 443,
-    match: (url) => matchSchemePrefix(url, 'https'),
+    match: (url) => matchSchemePrefix(url, "https"),
     request: (url) => networkRequest(url, true),
   },
   {
-    name: 'file',
+    name: "file",
     defaultPort: 0, // file URLs don't use a network port
-    match: (url) => matchSchemePrefix(url, 'file'),
+    match: (url) => matchSchemePrefix(url, "file"),
     request: (url) => url.openFile(),
+  },
+  {
+    name: "view-source",
+    defaultPort: 0,
+    match: (url) => matchViewSource(url),
+    request: (url) => networkRequest(url, false),
   },
 ];
 
@@ -134,8 +146,8 @@ export class URL {
   }
 
   async openFile(): Promise<string> {
-    const fs = await import('fs/promises');
-    return await fs.readFile(this.path, 'utf8');
+    const fs = await import("fs/promises");
+    return await fs.readFile(this.path, "utf8");
   }
 
   // async because socket I/O in Node can't block; callers must await it.
@@ -151,19 +163,19 @@ export function parseUrl(url: string): URL {
   let rest: string | undefined;
   const strategy = SCHEMES.find((s) => (rest = s.match(url)) !== undefined);
   if (!strategy || rest === undefined) {
-    const [scheme] = split1(url, '://');
+    const [scheme] = split1(url, "://");
     throw new Error(`unsupported scheme: ${scheme}`);
   }
 
-  if (!rest.includes('/')) rest = rest + '/';
+  if (!rest.includes("/")) rest = rest + "/";
   let host: string;
-  [host, rest] = split1(rest, '/');
-  const path = '/' + rest;
+  [host, rest] = split1(rest, "/");
+  const path = "/" + rest;
 
   let port = strategy.defaultPort;
-  if (host.includes(':')) {
+  if (host.includes(":")) {
     let portStr: string;
-    [host, portStr] = split1(host, ':');
+    [host, portStr] = split1(host, ":");
     port = Number.parseInt(portStr, 10);
   }
 
@@ -174,11 +186,11 @@ export function parseUrl(url: string): URL {
 // (Chapter 2 turns this into lex() in browser.ts, which returns the text instead.)
 export function show(body: string): void {
   let inTag = false;
-  let out = '';
+  let out = "";
   for (const c of body) {
-    if (c === '<') {
+    if (c === "<") {
       inTag = true;
-    } else if (c === '>') {
+    } else if (c === ">") {
       inTag = false;
     } else if (!inTag) {
       out += c;

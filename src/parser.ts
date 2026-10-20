@@ -3,34 +3,34 @@ export class Parser {
   body: string;
   maxCounter: number;
   result: string;
-  inTag: boolean;
+  isInTag: boolean;
 
   constructor(body: string) {
     this.body = body;
     this.counter = 0;
     this.maxCounter = body.length;
-    this.result = '';
-    this.inTag = false;
+    this.result = "";
+    this.isInTag = false;
   }
 
   process(): void {
-    mainLoop: while (this.counter < this.maxCounter) {
+    while (this.counter < this.maxCounter) {
       if (this.checkInTag()) {
         this.counter++;
         continue;
       }
 
-      if (this.body[this.counter] === '&') {
-        if (this.checkFor('&lt;')) {
-          this.result += '<';
+      if (this.body[this.counter] === "&") {
+        if (this.checkFor("&lt;")) {
+          this.result += "<";
           this.counter += 4; // Skip over '&lt;'
           continue;
-        } else if (this.checkFor('&gt;')) {
-          this.result += '>';
+        } else if (this.checkFor("&gt;")) {
+          this.result += ">";
           this.counter += 4; // Skip over '&gt;'
           continue;
-        } else if (this.checkFor('&amp;')) {
-          this.result += '&';
+        } else if (this.checkFor("&amp;")) {
+          this.result += "&";
           this.counter += 5; // Skip over '&amp;'
           continue;
         }
@@ -41,13 +41,14 @@ export class Parser {
   }
 
   checkInTag(): boolean {
-    if (this.body[this.counter] === '<') {
-      this.inTag = true;
-    } else if (this.inTag && this.body[this.counter] === '>') {
-      this.counter++;
-      this.inTag = false;
+    if (this.body[this.counter] === "<") {
+      this.isInTag = true;
+      return true;
+    } else if (this.isInTag && this.body[this.counter] === ">") {
+      this.isInTag = false;
+      return true;
     }
-    return this.inTag;
+    return this.isInTag;
   }
 
   proceed(): void {
