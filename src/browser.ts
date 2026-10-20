@@ -15,7 +15,10 @@ export const SCROLL_STEP = 100;
 // idiomatic TypeScript equivalent and reads better at the use site.
 export type DisplayItem = { x: number; y: number; c: string };
 
-export function layout(text: string): DisplayItem[] {
+export function layout(
+  text: string,
+  windowWidth: number = WIDTH,
+): DisplayItem[] {
   const displayList: DisplayItem[] = [];
   let cursorX = HSTEP;
   let cursorY = VSTEP;
@@ -27,7 +30,7 @@ export function layout(text: string): DisplayItem[] {
     } else {
       displayList.push({ x: cursorX, y: cursorY, c });
       cursorX += HSTEP;
-      if (cursorX >= WIDTH - HSTEP) {
+      if (cursorX >= windowWidth - HSTEP) {
         cursorY += VSTEP;
         cursorX = HSTEP;
       }
@@ -40,6 +43,7 @@ export class Browser {
   window: Window;
   displayList: DisplayItem[] = [];
   scroll = 0;
+  parsedBody: string = "";
 
   constructor() {
     // Replaces tkinter.Tk() + tkinter.Canvas(): a skia-canvas Window owns
@@ -47,6 +51,7 @@ export class Browser {
     this.window = new Window(WIDTH, HEIGHT, {
       title: "Browser",
       background: "white",
+      fit: "resize",
     });
     // Replaces self.window.bind("<Down>", self.scrolldown).
     this.window.on("keydown", (e) => {
@@ -64,16 +69,24 @@ export class Browser {
         this.scrolldown(SCROLL_STEP / 10);
       }
     });
+
+    this.window.on("resize", (e) => {
+      this.window.height = e.height;
+      this.window.width = e.width;
+      this.displayList = layout(this.parsedBody, this.window.width);
+      this.draw();
+    });
   }
 
   async load(url: URL): Promise<void> {
     const body = await url.request();
     if (url.skipParsing) {
-      this.displayList = layout(body);
+      this.displayList = layout(body, this.window.width);
     } else {
       const parser = new Parser(body);
       parser.process();
-      this.displayList = layout(parser.result);
+      this.parsedBody = parser.result;
+      this.displayList = layout(this.parsedBody, this.window.width);
     }
     this.draw();
   }
@@ -83,8 +96,7 @@ export class Browser {
     // A 2D canvas is just pixels, so we paint over the old frame instead.
     const ctx = this.window.ctx;
     ctx.fillStyle = "white";
-    ctx.fillRect(0, 0, WIDTH, HEIGHT);
-
+    ctx.fillRect(0, 0, this.window.width, this.window.height);
     // Tk's create_text centers text on (x, y) by default; match that.
     ctx.fillStyle = "black";
     ctx.font = "14px sans-serif";
@@ -92,7 +104,7 @@ export class Browser {
     ctx.textBaseline = "middle";
 
     for (const { x, y, c } of this.displayList) {
-      if (y > this.scroll + HEIGHT) {
+      if (y > this.scroll + this.window.height) {
         continue;
       }
       if (y + VSTEP < this.scroll) {
