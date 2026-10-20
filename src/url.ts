@@ -1,21 +1,11 @@
-import * as net from "node:net";
-import * as tls from "node:tls";
 import responseCache from "./response-cache.ts";
+import { Socket } from "./socket.ts";
 
 function split1(s: string, sep: string): [string, string] {
   const i = s.indexOf(sep);
   if (i === -1)
     throw new Error(`expected ${JSON.stringify(sep)} in ${JSON.stringify(s)}`);
   return [s.slice(0, i), s.slice(i + sep.length)];
-}
-
-function readAll(s: net.Socket): Promise<Buffer> {
-  return new Promise((resolve, reject) => {
-    const chunks: Buffer[] = [];
-    s.on("data", (chunk: Buffer) => chunks.push(chunk));
-    s.on("end", () => resolve(Buffer.concat(chunks)));
-    s.on("error", reject);
-  });
 }
 
 interface SchemeStrategy {
@@ -30,43 +20,6 @@ interface SchemeStrategy {
 function matchSchemePrefix(url: string, scheme: string): string | undefined {
   const prefix = `${scheme}://`;
   return url.startsWith(prefix) ? url.slice(prefix.length) : undefined;
-}
-
-class Socket {
-  private static socketInstanceMap: Map<string, Socket> = new Map();
-  private socket: net.Socket;
-
-  static get(secure: boolean, host: string, port: number): Socket {
-    if (this.socketInstanceMap.has(host)) {
-      return this.socketInstanceMap.get(host)!;
-    }
-    const instance = new Socket(secure, host, port);
-    this.socketInstanceMap.set(host, instance);
-    return instance;
-  }
-
-  private constructor(secure: boolean, host: string, port: number) {
-    this.socket = secure
-      ? tls.connect({ host, port, servername: host })
-      : new net.Socket();
-    if (!secure) {
-      this.socket.connect({ host, port });
-    }
-  }
-
-  write(data: string, encoding: BufferEncoding = "utf8") {
-    this.socket.write(data, encoding);
-  }
-
-  destroy(host: string) {
-    console.log(`Destroying socket for host: ${host}`);
-    this.socket.destroy();
-    Socket.socketInstanceMap.delete(host);
-  }
-
-  readAll(): Promise<Buffer> {
-    return readAll(this.socket);
-  }
 }
 
 // tls.connect plays the role of ssl's ctx.wrap_socket(s, server_hostname=host).

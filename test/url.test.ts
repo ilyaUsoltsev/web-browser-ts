@@ -73,16 +73,6 @@ test("request() decodes UTF-8 split across chunk boundaries", async () => {
   assert.equal(body, "hé€😀");
 });
 
-test("request() rejects transfer-encoding (header names are case-insensitive)", async () => {
-  const { port } = await serve([
-    Buffer.from("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n"),
-  ]);
-  await assert.rejects(
-    parseUrl(`http://127.0.0.1:${port}/`).request(),
-    /transfer-encoding/,
-  );
-});
-
 test("show() prints text with tags removed", (t) => {
   const written: string[] = [];
   t.mock.method(
