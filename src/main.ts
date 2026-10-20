@@ -7,8 +7,8 @@
 import { Browser } from "./browser.ts";
 import { parseUrl, load } from "./url.ts";
 
-const dp = "https://google.ru";
-// const dp = "http://browser.engineering/redirect";
+// const dp = "https://google.ru";
+const dp = "http://browser.engineering/redirect";
 // const dp = "file:///Users/ilyau/Desktop/web-browser-ts/index.html";
 // const dp = "data:text/html,<b>Hello world!</b>";
 // const dp = "view-source:file:///Users/ilyau/Desktop/web-browser-ts/index.html";
@@ -25,5 +25,6 @@ if (textMode) {
 } else {
   // No tkinter.mainloop() needed: opening a Window starts skia-canvas's event
   // loop automatically, and Node keeps running until the window is closed.
-  await new Browser().load(parseUrl(target));
+  const browser = new Browser();
+  await browser.load(parseUrl(target));
 }

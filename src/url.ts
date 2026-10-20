@@ -1,5 +1,6 @@
 import * as net from "node:net";
 import * as tls from "node:tls";
+import responseCache from "./response-cache.ts";
 
 function split1(s: string, sep: string): [string, string] {
   const i = s.indexOf(sep);
@@ -74,6 +75,12 @@ async function networkRequest(
   url: URL,
   secure: boolean,
 ): ReturnType<SchemeStrategy["request"]> {
+  const cachedResponse = responseCache.get(url.host + url.path);
+  if (cachedResponse) {
+    console.log(`Cache hit for URL: ${url.host + url.path}`);
+    return Promise.resolve(cachedResponse);
+  }
+
   const socket = Socket.get(secure, url.host, url.port);
 
   // Attach listeners before writing so no data or error event can be missed.
@@ -106,21 +113,16 @@ async function networkRequest(
     responseHeaders.set(header.toLowerCase(), value.trim());
   }
 
-  // if (responseHeaders.has("transfer-encoding")) {
-  //   // Retry with HTTP/1.0?
-  //   throw new Error("transfer-encoding not supported");
-  // }
-
-  // if (responseHeaders.has("content-encoding")) {
-  //   throw new Error("content-encoding not supported");
-  // }
-
   if (responseHeaders.has("location")) {
     const location = responseHeaders.get("location")!;
     socket.destroy(url.host);
     return networkRequest(parseUrl(location), url.scheme === "https");
   }
+
   socket.destroy(url.host);
+
+  responseCache.set(url.host + url.path, body);
+
   return body;
 }
 
