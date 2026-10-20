@@ -44,7 +44,11 @@ export class Browser {
     });
     // Replaces self.window.bind("<Down>", self.scrolldown).
     this.window.on("keydown", (e) => {
-      if (e.key === "ArrowDown") this.scrolldown();
+      if (e.key === "ArrowDown") {
+        this.scrolldown();
+      } else if (e.key === "ArrowUp") {
+        this.scrollup();
+      }
     });
   }
 
@@ -74,14 +78,26 @@ export class Browser {
     ctx.textBaseline = "middle";
 
     for (const { x, y, c } of this.displayList) {
-      if (y > this.scroll + HEIGHT) continue;
-      if (y + VSTEP < this.scroll) continue;
+      if (y > this.scroll + HEIGHT) {
+        continue;
+      }
+      if (y + VSTEP < this.scroll) {
+        continue;
+      }
       ctx.fillText(c, x, y - this.scroll);
     }
   }
 
   scrolldown(): void {
     this.scroll += SCROLL_STEP;
+    this.draw();
+  }
+
+  scrollup(): void {
+    this.scroll -= SCROLL_STEP;
+    if (this.scroll < 0) {
+      this.scroll = 0;
+    }
     this.draw();
   }
 }
