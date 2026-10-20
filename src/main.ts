@@ -25,6 +25,5 @@ if (textMode) {
 } else {
   // No tkinter.mainloop() needed: opening a Window starts skia-canvas's event
   // loop automatically, and Node keeps running until the window is closed.
-  const browser = new Browser();
-  await browser.load(parseUrl(target));
+  await new Browser().load(parseUrl(target));
 }
