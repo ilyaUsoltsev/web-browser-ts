@@ -20,11 +20,17 @@ export function layout(text: string): DisplayItem[] {
   let cursorX = HSTEP;
   let cursorY = VSTEP;
   for (const c of text) {
-    displayList.push({ x: cursorX, y: cursorY, c });
-    cursorX += HSTEP;
-    if (cursorX >= WIDTH - HSTEP) {
+    // Handle newline characters by moving the cursor to the next line.
+    if (c === "\n") {
       cursorY += VSTEP;
       cursorX = HSTEP;
+    } else {
+      displayList.push({ x: cursorX, y: cursorY, c });
+      cursorX += HSTEP;
+      if (cursorX >= WIDTH - HSTEP) {
+        cursorY += VSTEP;
+        cursorX = HSTEP;
+      }
     }
   }
   return displayList;
