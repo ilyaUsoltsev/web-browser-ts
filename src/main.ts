@@ -7,8 +7,10 @@
 import { Browser } from "./browser.ts";
 import { parseUrl, load } from "./url.ts";
 
-const dp = "file:///Users/ilyau/Desktop/web-browser-ts/index.html";
-// const dp = 'data:text/html,<b>Hello world!</b>';
+const dp = "https://google.ru";
+// const dp = "http://browser.engineering/redirect";
+// const dp = "file:///Users/ilyau/Desktop/web-browser-ts/index.html";
+// const dp = "data:text/html,<b>Hello world!</b>";
 // const dp = "view-source:file:///Users/ilyau/Desktop/web-browser-ts/index.html";
 // const dp = "view-source:https://ilyausoltsev.com/";
 

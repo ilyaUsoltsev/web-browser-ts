@@ -31,25 +31,60 @@ function matchSchemePrefix(url: string, scheme: string): string | undefined {
   return url.startsWith(prefix) ? url.slice(prefix.length) : undefined;
 }
 
+class Socket {
+  private static socketInstanceMap: Map<string, Socket> = new Map();
+  private socket: net.Socket;
+
+  static get(secure: boolean, host: string, port: number): Socket {
+    if (this.socketInstanceMap.has(host)) {
+      return this.socketInstanceMap.get(host)!;
+    }
+    const instance = new Socket(secure, host, port);
+    this.socketInstanceMap.set(host, instance);
+    return instance;
+  }
+
+  private constructor(secure: boolean, host: string, port: number) {
+    this.socket = secure
+      ? tls.connect({ host, port, servername: host })
+      : new net.Socket();
+    if (!secure) {
+      this.socket.connect({ host, port });
+    }
+  }
+
+  write(data: string, encoding: BufferEncoding = "utf8") {
+    this.socket.write(data, encoding);
+  }
+
+  destroy(host: string) {
+    console.log(`Destroying socket for host: ${host}`);
+    this.socket.destroy();
+    Socket.socketInstanceMap.delete(host);
+  }
+
+  readAll(): Promise<Buffer> {
+    return readAll(this.socket);
+  }
+}
+
 // tls.connect plays the role of ssl's ctx.wrap_socket(s, server_hostname=host).
 // `servername` sets SNI, which servers hosting many sites need.
 async function networkRequest(
   url: URL,
   secure: boolean,
 ): ReturnType<SchemeStrategy["request"]> {
-  const s: net.Socket = secure
-    ? tls.connect({ host: url.host, port: url.port, servername: url.host })
-    : net.connect({ host: url.host, port: url.port });
+  const socket = Socket.get(secure, url.host, url.port);
 
   // Attach listeners before writing so no data or error event can be missed.
-  const received = readAll(s);
+  const received = socket.readAll();
 
   let request = `GET ${url.path} HTTP/1.1\r\n`;
   request += `Connection: close\r\n`;
   request += `User-Agent: web-browser-ts/1.0\r\n`;
   request += `Host: ${url.host}\r\n`;
   request += "\r\n";
-  s.write(request, "utf8"); // Node buffers this until the connection is up
+  socket.write(request, "utf8"); // Node buffers this until the connection is up
 
   const response = (await received).toString("utf8");
 
@@ -71,13 +106,21 @@ async function networkRequest(
     responseHeaders.set(header.toLowerCase(), value.trim());
   }
 
-  if (responseHeaders.has("transfer-encoding"))
-    // Retry with HTTP/1.0?
-    throw new Error("transfer-encoding not supported");
-  if (responseHeaders.has("content-encoding"))
-    throw new Error("content-encoding not supported");
+  // if (responseHeaders.has("transfer-encoding")) {
+  //   // Retry with HTTP/1.0?
+  //   throw new Error("transfer-encoding not supported");
+  // }
 
-  s.destroy();
+  // if (responseHeaders.has("content-encoding")) {
+  //   throw new Error("content-encoding not supported");
+  // }
+
+  if (responseHeaders.has("location")) {
+    const location = responseHeaders.get("location")!;
+    socket.destroy(url.host);
+    return networkRequest(parseUrl(location), url.scheme === "https");
+  }
+  socket.destroy(url.host);
   return body;
 }
 
