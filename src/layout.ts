@@ -1,5 +1,5 @@
 import type { Layout, DisplayItem, TokenFont } from "./types.ts";
-import { WIDTH, HSTEP, VSTEP, FONT } from "./constants.ts";
+import { WIDTH, HSTEP, VSTEP, DEFAULT_FONT } from "./constants.ts";
 import { type Token, Text, Tag } from "./tokens.ts";
 import { Canvas, CanvasRenderingContext2D } from "skia-canvas";
 
@@ -11,7 +11,6 @@ export class LayoutClass {
 
   constructor() {
     this.measureCtx = new Canvas(1, 1).getContext("2d");
-    this.measureCtx.font = FONT;
     this.spaceWidth = this.measureText(" ");
   }
 
@@ -31,11 +30,7 @@ export class LayoutClass {
     let cursorX = HSTEP;
     let cursorY = VSTEP;
     this.displayList = [];
-    let currentFont: TokenFont = {
-      italic: false,
-      bold: false,
-      size: 16,
-    };
+    let currentFont = DEFAULT_FONT;
     for (const token of tokens) {
       if (token instanceof Text) {
         for (const word of token.text.split(/\s+/)) {
@@ -56,13 +51,9 @@ export class LayoutClass {
         if (token.name === "b") {
           currentFont = { ...currentFont, bold: true };
         } else if (token.name === "i") {
-          currentFont = { ...currentFont, italic: true };
+          currentFont = { ...currentFont, italic: true, size: 36 };
         } else if (token.name === "/b" || token.name === "/i") {
-          currentFont = {
-            italic: false,
-            bold: false,
-            size: currentFont.size,
-          };
+          currentFont = DEFAULT_FONT;
         }
         this.measureCtx.font = this.getFont(currentFont);
         this.spaceWidth = this.measureText(" ");

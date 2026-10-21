@@ -1,3 +1,5 @@
+import type { TokenFont } from "./types.ts";
+
 export const SELF_CLOSING_TAGS = [
   "area",
   "base",
@@ -20,4 +22,9 @@ export const HEIGHT = 600;
 export const HSTEP = 10;
 export const VSTEP = 18;
 export const SCROLL_STEP = 100;
-export const FONT = "14px sans-serif";
+
+export const DEFAULT_FONT: TokenFont = {
+  italic: false,
+  bold: false,
+  size: 14,
+};

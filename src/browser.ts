@@ -2,7 +2,7 @@ import { Window } from "skia-canvas";
 import type { URL } from "./url.ts";
 import { Parser } from "./parser.ts";
 import type { Token } from "./tokens.ts";
-import { WIDTH, HSTEP, VSTEP, HEIGHT, SCROLL_STEP, FONT } from "./constants.ts";
+import { WIDTH, HSTEP, VSTEP, HEIGHT, SCROLL_STEP } from "./constants.ts";
 import { LayoutClass } from "./layout.ts";
 import type { Layout } from "./types.ts";
 
@@ -66,7 +66,6 @@ export class Browser {
     ctx.fillRect(0, 0, this.window.width, this.window.height);
     // Tk's create_text centers text on (x, y) by default; match that.
     ctx.fillStyle = "black";
-    ctx.font = FONT;
 
     for (const { x, y, word, font } of this.layout.displayList) {
       if (y > this.scroll + this.window.height) {
@@ -76,7 +75,6 @@ export class Browser {
         continue;
       }
       ctx.font = font;
-      console.log(font);
       ctx.fillText(word, x, y - this.scroll);
     }
 
