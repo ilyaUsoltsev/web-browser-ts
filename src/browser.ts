@@ -68,13 +68,14 @@ export class Browser {
     ctx.fillStyle = "black";
     ctx.font = FONT;
 
-    for (const { x, y, word } of this.layout.displayList) {
+    for (const { x, y, word, font } of this.layout.displayList) {
       if (y > this.scroll + this.window.height) {
         continue;
       }
       if (y + VSTEP < this.scroll) {
         continue;
       }
+      ctx.font = font;
       ctx.fillText(word, x, y - this.scroll);
     }
 

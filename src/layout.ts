@@ -1,6 +1,6 @@
-import type { Layout, DisplayItem } from "./types.ts";
+import type { Layout, DisplayItem, TokenFont } from "./types.ts";
 import { WIDTH, HSTEP, VSTEP, FONT } from "./constants.ts";
-import { type Token, Text } from "./tokens.ts";
+import { type Token, Text, Tag } from "./tokens.ts";
 import { Canvas, CanvasRenderingContext2D } from "skia-canvas";
 
 export class LayoutClass {
@@ -19,28 +19,53 @@ export class LayoutClass {
     return this.measureCtx.measureText(text).width;
   }
 
+  getFont(tokenFont: TokenFont): string {
+    let result = "";
+    result += `${tokenFont.weight} `;
+    result += `${tokenFont.size}px `;
+    result += `${tokenFont.style}`;
+    return result;
+  }
+
   calculate(tokens: Token[], windowWidth: number = WIDTH): Layout {
     let cursorX = HSTEP;
     let cursorY = VSTEP;
     this.displayList = [];
+    let currentFont: TokenFont = {
+      style: "sans-serif",
+      weight: "normal",
+      size: 16,
+    };
     for (const token of tokens) {
       if (token instanceof Text) {
         for (const word of token.text.split(/\s+/)) {
           const wordWidth = this.measureText(word);
-
-          // Handle newline characters by moving the cursor to the next line.
-          if (word === "\n") {
+          if (cursorX >= windowWidth - HSTEP) {
             cursorY += VSTEP;
             cursorX = HSTEP;
-          } else {
-            if (cursorX >= windowWidth - HSTEP) {
-              cursorY += VSTEP;
-              cursorX = HSTEP;
-            }
-            this.displayList.push({ x: cursorX, y: cursorY, word });
-            cursorX += wordWidth + this.spaceWidth;
           }
+          this.displayList.push({
+            x: cursorX,
+            y: cursorY,
+            word,
+            font: this.getFont(currentFont),
+          });
+          cursorX += wordWidth + this.spaceWidth;
         }
+      } else if (token instanceof Tag) {
+        if (token.name === "b") {
+          currentFont = { ...currentFont, weight: "bold" };
+        } else if (token.name === "i") {
+          currentFont = { ...currentFont, style: "italic" };
+        } else if (token.name === "/b" || token.name === "/i") {
+          currentFont = {
+            style: "sans-serif",
+            weight: "normal",
+            size: currentFont.size,
+          };
+        }
+        this.measureCtx.font = this.getFont(currentFont);
+        this.spaceWidth = this.measureText(" ");
       }
     }
 
