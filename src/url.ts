@@ -30,7 +30,6 @@ async function networkRequest(
 ): ReturnType<SchemeStrategy["request"]> {
   const cachedResponse = responseCache.get(url.host + url.path);
   if (cachedResponse) {
-    console.log(`Cache hit for URL: ${url.host + url.path}`);
     return Promise.resolve(cachedResponse);
   }
 

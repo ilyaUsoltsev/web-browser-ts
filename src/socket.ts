@@ -28,7 +28,6 @@ export class Socket {
   }
 
   destroy(host: string) {
-    console.log(`Destroying socket for host: ${host}`);
     this.socket.destroy();
     Socket.socketInstanceMap.delete(host);
   }

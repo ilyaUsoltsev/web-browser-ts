@@ -54,7 +54,6 @@ export class Browser {
       const parser = new Parser(body);
       parser.process();
       this.tokens = parser.getTokens();
-      console.log(this.tokens);
       this.layout = this.layoutClass.calculate(this.tokens, this.window.width);
     }
     this.draw();
