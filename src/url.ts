@@ -161,8 +161,18 @@ export function parseUrl(url: string): URL {
 
   const strategy = SCHEMES.find((s) => (rest = s.match(url)) !== undefined);
   if (!strategy || rest === undefined) {
-    const [scheme] = split1(url, "://");
-    throw new Error(`unsupported scheme: ${scheme}`);
+    return new URL(
+      {
+        name: "unknown",
+        defaultPort: 0,
+        match: () => undefined,
+        request: () => Promise.resolve("<p>Smth went wrong</p>"),
+      },
+      "unknown",
+      0,
+      "/",
+      false,
+    );
   }
 
   if (!rest.includes("/")) rest = rest + "/";

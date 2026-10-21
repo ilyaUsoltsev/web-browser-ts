@@ -7,7 +7,7 @@
 import { Browser } from "./browser.ts";
 import { parseUrl, load } from "./url.ts";
 
-// const dp = "https://google.ru";
+// const dp = "about:blank";
 const dp = "http://browser.engineering/redirect";
 // const dp = "file:///Users/ilyau/Desktop/web-browser-ts/index.html";
 // const dp = "data:text/html,<b>Hello world!</b>";
