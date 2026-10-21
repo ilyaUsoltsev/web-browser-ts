@@ -1,9 +1,17 @@
 // Chapter 2: Drawing to the Screen
 // https://browser.engineering/graphics.html
 
-import { Window } from "skia-canvas";
+import { Canvas, Window } from "skia-canvas";
 import type { URL } from "./url.ts";
 import { Parser } from "./parser.ts";
+import type { Token } from "./tokens.ts";
+import { Text, Tag } from "./tokens.ts";
+
+export const FONT = "14px sans-serif";
+
+// Offscreen context used only for measuring — the equivalent of tkinter.font.Font.measure().
+const measureCtx = new Canvas(1, 1).getContext("2d");
+measureCtx.font = FONT;
 
 export const WIDTH = 800;
 export const HEIGHT = 600;
@@ -13,27 +21,40 @@ export const SCROLL_STEP = 100;
 
 // The book's display list holds (x, y, c) tuples; an object type is the
 // idiomatic TypeScript equivalent and reads better at the use site.
-export type DisplayItem = { x: number; y: number; c: string };
+export type DisplayItem = { x: number; y: number; word: string };
 type Layout = { displayList: DisplayItem[]; totalHeight: number };
 
-export function layout(text: string, windowWidth: number = WIDTH): Layout {
+function measureText(text: string): number {
+  return measureCtx.measureText(text).width;
+}
+
+const SPACE_WIDTH = measureText(" ");
+
+export function layout(tokens: Token[], windowWidth: number = WIDTH): Layout {
   const displayList: DisplayItem[] = [];
   let cursorX = HSTEP;
   let cursorY = VSTEP;
-  for (const c of text) {
-    // Handle newline characters by moving the cursor to the next line.
-    if (c === "\n") {
-      cursorY += VSTEP;
-      cursorX = HSTEP;
-    } else {
-      displayList.push({ x: cursorX, y: cursorY, c });
-      cursorX += HSTEP;
-      if (cursorX >= windowWidth - HSTEP) {
-        cursorY += VSTEP;
-        cursorX = HSTEP;
+  for (const token of tokens) {
+    if (token instanceof Text) {
+      for (const word of token.text.split(" ").filter(Boolean)) {
+        const wordWidth = measureText(word);
+
+        // Handle newline characters by moving the cursor to the next line.
+        if (word === "\n") {
+          cursorY += VSTEP;
+          cursorX = HSTEP;
+        } else {
+          if (cursorX >= windowWidth - HSTEP) {
+            cursorY += VSTEP;
+            cursorX = HSTEP;
+          }
+          displayList.push({ x: cursorX, y: cursorY, word });
+          cursorX += wordWidth + SPACE_WIDTH;
+        }
       }
     }
   }
+  console.log(displayList);
   return { displayList, totalHeight: cursorY };
 }
 
@@ -41,7 +62,7 @@ export class Browser {
   window: Window;
   layout: Layout = { displayList: [], totalHeight: 0 };
   scroll = 0;
-  parsedBody: string = "";
+  tokens: Token[] = [];
   scrollbarHeight = 0;
   scrollbarY = 0;
 
@@ -73,7 +94,7 @@ export class Browser {
     this.window.on("resize", (e) => {
       this.window.height = e.height;
       this.window.width = e.width;
-      this.layout = layout(this.parsedBody, this.window.width);
+      this.layout = layout(this.tokens, this.window.width);
       this.draw();
     });
   }
@@ -81,12 +102,13 @@ export class Browser {
   async load(url: URL): Promise<void> {
     const body = await url.request();
     if (url.skipParsing) {
-      this.layout = layout(body, this.window.width);
+      // this.layout = layout(body, this.window.width);
     } else {
       const parser = new Parser(body);
       parser.process();
-      this.parsedBody = parser.result;
-      this.layout = layout(this.parsedBody, this.window.width);
+      this.tokens = parser.getTokens();
+      console.log(this.tokens);
+      this.layout = layout(this.tokens, this.window.width);
     }
     this.draw();
   }
@@ -99,18 +121,16 @@ export class Browser {
     ctx.fillRect(0, 0, this.window.width, this.window.height);
     // Tk's create_text centers text on (x, y) by default; match that.
     ctx.fillStyle = "black";
-    ctx.font = "14px sans-serif";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
+    ctx.font = FONT;
 
-    for (const { x, y, c } of this.layout.displayList) {
+    for (const { x, y, word } of this.layout.displayList) {
       if (y > this.scroll + this.window.height) {
         continue;
       }
       if (y + VSTEP < this.scroll) {
         continue;
       }
-      ctx.fillText(c, x, y - this.scroll);
+      ctx.fillText(word, x, y - this.scroll);
     }
 
     // Add scrollbar

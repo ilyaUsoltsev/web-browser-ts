@@ -168,7 +168,7 @@ export function parseUrl(url: string): URL {
         match: () => undefined,
         request: () => Promise.resolve("<p>Smth went wrong</p>"),
       },
-      "unknown",
+      "",
       0,
       "/",
       false,
