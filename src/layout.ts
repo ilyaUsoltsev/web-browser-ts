@@ -21,9 +21,9 @@ export class LayoutClass {
 
   getFont(tokenFont: TokenFont): string {
     let result = "";
-    result += `${tokenFont.weight} `;
-    result += `${tokenFont.size}px `;
-    result += `${tokenFont.style}`;
+    result += `${tokenFont.bold ? "bold" : "normal"} `;
+    result += `${tokenFont.italic ? "italic " : ""}`;
+    result += `${tokenFont.size}px sans-serif`;
     return result;
   }
 
@@ -32,8 +32,8 @@ export class LayoutClass {
     let cursorY = VSTEP;
     this.displayList = [];
     let currentFont: TokenFont = {
-      style: "sans-serif",
-      weight: "normal",
+      italic: false,
+      bold: false,
       size: 16,
     };
     for (const token of tokens) {
@@ -54,13 +54,13 @@ export class LayoutClass {
         }
       } else if (token instanceof Tag) {
         if (token.name === "b") {
-          currentFont = { ...currentFont, weight: "bold" };
+          currentFont = { ...currentFont, bold: true };
         } else if (token.name === "i") {
-          currentFont = { ...currentFont, style: "italic" };
+          currentFont = { ...currentFont, italic: true };
         } else if (token.name === "/b" || token.name === "/i") {
           currentFont = {
-            style: "sans-serif",
-            weight: "normal",
+            italic: false,
+            bold: false,
             size: currentFont.size,
           };
         }

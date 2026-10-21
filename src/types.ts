@@ -1,6 +1,6 @@
 export type TokenFont = {
-  style: "italic" | "sans-serif";
-  weight: "normal" | "bold";
+  italic: boolean;
+  bold: boolean;
   size: number;
 };
 

@@ -76,6 +76,7 @@ export class Browser {
         continue;
       }
       ctx.font = font;
+      console.log(font);
       ctx.fillText(word, x, y - this.scroll);
     }
 
