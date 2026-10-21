@@ -25,8 +25,10 @@ export class LayoutClass {
     const metrics = this.measureCtx.measureText(text);
     return {
       width: metrics.width,
-      heigth:
-        metrics.actualBoundingBoxAscent + metrics.actualBoundingBoxDescent,
+      // font metrics, not glyph ink: every word in the same font gets the same height
+      heigth: Math.round(
+        metrics.fontBoundingBoxAscent + metrics.fontBoundingBoxDescent,
+      ),
     };
   }
 
@@ -44,26 +46,30 @@ export class LayoutClass {
     this.displayList = [];
     let currentFont = DEFAULT_FONT;
     let currentLineNumber = 0;
-    let currentLineHeight = VSTEP;
+    let currentWordHeight = VSTEP;
     let lineHeights: number[] = [];
     const displayLists: DisplayItem[][] = [];
 
     for (const token of tokens) {
+      const moveToNewLine = () => {
+        lineHeights[currentLineNumber] =
+          currentWordHeight * LINE_HEIGHT_MULTIPLIER + LINE_HEIGHT_PADDING;
+        cursorY += lineHeights[currentLineNumber]!;
+        cursorX = HSTEP;
+        currentLineNumber++;
+        currentWordHeight = VSTEP;
+      };
       if (token instanceof Text) {
         for (const word of token.text.split(/\s+/)) {
           const { width: wordWidth, heigth: wordHeight } =
             this.measureText(word);
 
-          currentLineHeight = Math.max(currentLineHeight, wordHeight);
-
           if (cursorX + wordWidth >= windowWidth - HSTEP) {
-            lineHeights[currentLineNumber] =
-              currentLineHeight * LINE_HEIGHT_MULTIPLIER + LINE_HEIGHT_PADDING;
-            cursorY += currentLineHeight;
-            cursorX = HSTEP;
-            currentLineNumber++;
-            currentLineHeight = VSTEP;
+            moveToNewLine();
           }
+          // after the wrap check, so a wrapped word only affects its own line
+          currentWordHeight = Math.max(currentWordHeight, wordHeight);
+
           if (!displayLists[currentLineNumber]) {
             displayLists[currentLineNumber] = [];
           }
@@ -83,6 +89,8 @@ export class LayoutClass {
           currentFont = { ...currentFont, italic: true, size: 34 };
         } else if (token.name === "/b" || token.name === "/i") {
           currentFont = DEFAULT_FONT;
+        } else if (token.name === "br" || token.name === "br /") {
+          moveToNewLine();
         }
         this.measureCtx.font = this.getFont(currentFont);
         this.spaceWidth = this.measureText(" ").width;
@@ -90,7 +98,7 @@ export class LayoutClass {
 
       // setting the line height for the last line
       lineHeights[currentLineNumber] =
-        currentLineHeight * LINE_HEIGHT_MULTIPLIER + LINE_HEIGHT_PADDING;
+        currentWordHeight * LINE_HEIGHT_MULTIPLIER + LINE_HEIGHT_PADDING;
     }
 
     displayLists.forEach((line, i) => {
@@ -101,7 +109,7 @@ export class LayoutClass {
         item.y = lineHeightSum;
       }
     });
-
+    console.log(lineHeights, "line heights after layout calculation");
     this.totalHeight = cursorY + VSTEP; // Add bottom padding in form of VSTEP
     this.displayList = displayLists.flat();
     return { displayList: this.displayList, totalHeight: this.totalHeight };
