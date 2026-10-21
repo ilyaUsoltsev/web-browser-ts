@@ -36,7 +36,7 @@ export function layout(tokens: Token[], windowWidth: number = WIDTH): Layout {
   let cursorY = VSTEP;
   for (const token of tokens) {
     if (token instanceof Text) {
-      for (const word of token.text.split(" ").filter(Boolean)) {
+      for (const word of token.text.split(/\s+/)) {
         const wordWidth = measureText(word);
 
         // Handle newline characters by moving the cursor to the next line.
