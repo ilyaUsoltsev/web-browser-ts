@@ -1,27 +1,42 @@
 import { test } from "node:test";
 import { Parser } from "../src/parser.ts";
+import { Text, Tag } from "../src/tokens.ts";
 import assert from "node:assert/strict";
 
-test("Parser processes HTML correctly", () => {
-  const parser = new Parser("<p>a<i>b</i>c</p>");
+function parse(body: string) {
+  const parser = new Parser(body);
   parser.process();
-  assert.equal(parser.result, "abc");
+  return parser.getTokens();
+}
+
+test("Parser processes HTML correctly", () => {
+  assert.deepEqual(parse("<p>a<i>b</i>c</p>"), [
+    new Tag("p"),
+    new Text("a"),
+    new Tag("i"),
+    new Text("b"),
+    new Tag("/i"),
+    new Text("c"),
+    new Tag("/p"),
+  ]);
 });
 
 test("Parser processes empty HTML correctly", () => {
-  const parser = new Parser("");
-  parser.process();
-  assert.equal(parser.result, "");
+  assert.deepEqual(parse(""), []);
 });
 
 test("Parser parses &amp; correctly", () => {
-  const parser = new Parser("&amp;");
-  parser.process();
-  assert.equal(parser.result, "&");
+  assert.deepEqual(parse("&amp;"), [new Text("&")]);
+});
+
+test("Parser parses &lt; and &gt; correctly", () => {
+  assert.deepEqual(parse("<p>&lt;b&gt;</p>"), [
+    new Tag("p"),
+    new Text("<b>"),
+    new Tag("/p"),
+  ]);
 });
 
 test("Parser parses empty brackets correctly", () => {
-  const parser = new Parser("<><>and<>");
-  parser.process();
-  assert.equal(parser.result, "and");
+  assert.deepEqual(parse("<><>and<>"), [new Text("and")]);
 });

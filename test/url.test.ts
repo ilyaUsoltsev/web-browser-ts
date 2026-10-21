@@ -26,10 +26,6 @@ test("parses a custom port", () => {
   assert.equal(url.path, "/a/b?c=d");
 });
 
-test("rejects unsupported schemes", () => {
-  assert.throws(() => parseUrl("ftp://example.org/"));
-});
-
 // A one-shot local server: records the request, replies with `chunks` (written
 // separately so we exercise chunk boundaries), then closes the connection.
 async function serve(

@@ -27,6 +27,7 @@ export class Parser {
         }
         this.isInTag = true;
         this.proceed();
+        continue;
       } else if (this.isInTag && this.body[this.counter] === ">") {
         if (this.currentElement) {
           this.result.push(new Tag(this.currentElement.trim()));
@@ -34,6 +35,7 @@ export class Parser {
         }
         this.isInTag = false;
         this.proceed();
+        continue;
       }
 
       if (this.body[this.counter] === "&") {
@@ -53,6 +55,10 @@ export class Parser {
       }
 
       this.consume();
+    }
+    if (this.currentElement) {
+      this.result.push(new Text(this.currentElement.trim()));
+      this.currentElement = "";
     }
   }
 

@@ -1,19 +1,47 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { layout, HSTEP, VSTEP, WIDTH } from "../src/browser.ts";
+import { LayoutClass } from "../src/layout.ts";
+import { Text, Tag } from "../src/tokens.ts";
+import { HSTEP, VSTEP, WIDTH } from "../src/constants.ts";
 
-test("layout() places characters on a fixed grid", () => {
-  const list = layout("ab");
-  assert.deepEqual(list, [
-    { x: HSTEP, y: VSTEP, c: "a" },
-    { x: 2 * HSTEP, y: VSTEP, c: "b" },
+test("LayoutClass places words left to right on one line", () => {
+  const layout = new LayoutClass();
+  const { displayList } = layout.calculate([new Text("ab cd")]);
+  assert.deepEqual(displayList, [
+    { x: HSTEP, y: VSTEP, word: "ab" },
+    {
+      x: HSTEP + layout.measureText("ab") + layout.spaceWidth,
+      y: VSTEP,
+      word: "cd",
+    },
   ]);
 });
 
-test("layout() wraps at the window width", () => {
-  const perLine = Math.ceil((WIDTH - 2 * HSTEP) / HSTEP);
-  const list = layout("x".repeat(perLine + 1));
-  assert.equal(list[perLine - 1]!.y, VSTEP);
-  assert.deepEqual(list[perLine], { x: HSTEP, y: 2 * VSTEP, c: "x" });
-  for (const { x } of list) assert.ok(x < WIDTH - HSTEP);
+test("LayoutClass ignores tags", () => {
+  const layout = new LayoutClass();
+  const { displayList } = layout.calculate([
+    new Tag("p"),
+    new Text("a"),
+    new Tag("/p"),
+  ]);
+  assert.deepEqual(displayList, [{ x: HSTEP, y: VSTEP, word: "a" }]);
+});
+
+test("LayoutClass wraps at the window width", () => {
+  const layout = new LayoutClass();
+  const { displayList, totalHeight } = layout.calculate([
+    new Text("word ".repeat(200)),
+  ]);
+  const ys = new Set(displayList.map((item) => item.y));
+  assert.ok(ys.size > 1);
+  for (const { x } of displayList) assert.ok(x < WIDTH - HSTEP);
+  assert.ok(totalHeight > Math.max(...ys));
+});
+
+test("LayoutClass wraps earlier in a narrower window", () => {
+  const layout = new LayoutClass();
+  const tokens = [new Text("word ".repeat(200))];
+  const wide = layout.calculate(tokens, WIDTH).totalHeight;
+  const narrow = layout.calculate(tokens, WIDTH / 2).totalHeight;
+  assert.ok(narrow > wide);
 });
