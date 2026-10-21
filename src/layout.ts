@@ -11,11 +11,17 @@ export class LayoutClass {
 
   constructor() {
     this.measureCtx = new Canvas(1, 1).getContext("2d");
-    this.spaceWidth = this.measureText(" ");
+    this.measureCtx.font = this.getFont(DEFAULT_FONT);
+    this.spaceWidth = this.measureText(" ").width;
   }
 
-  measureText(text: string): number {
-    return this.measureCtx.measureText(text).width;
+  measureText(text: string): { width: number; heigth: number } {
+    const metrics = this.measureCtx.measureText(text);
+    return {
+      width: metrics.width,
+      heigth:
+        metrics.actualBoundingBoxAscent + metrics.actualBoundingBoxDescent,
+    };
   }
 
   getFont(tokenFont: TokenFont): string {
@@ -26,16 +32,18 @@ export class LayoutClass {
     return result;
   }
 
-  calculate(tokens: Token[], windowWidth: number = WIDTH): Layout {
+  calculate(tokens: Token[], windowWidth: number): Layout {
     let cursorX = HSTEP;
     let cursorY = VSTEP;
     this.displayList = [];
     let currentFont = DEFAULT_FONT;
+
     for (const token of tokens) {
       if (token instanceof Text) {
         for (const word of token.text.split(/\s+/)) {
-          const wordWidth = this.measureText(word);
-          if (cursorX >= windowWidth - HSTEP) {
+          const wordWidth = this.measureText(word).width;
+
+          if (cursorX + wordWidth >= windowWidth - HSTEP) {
             cursorY += VSTEP;
             cursorX = HSTEP;
           }
@@ -51,12 +59,12 @@ export class LayoutClass {
         if (token.name === "b") {
           currentFont = { ...currentFont, bold: true };
         } else if (token.name === "i") {
-          currentFont = { ...currentFont, italic: true, size: 36 };
+          currentFont = { ...currentFont, italic: true, size: 14 };
         } else if (token.name === "/b" || token.name === "/i") {
           currentFont = DEFAULT_FONT;
         }
         this.measureCtx.font = this.getFont(currentFont);
-        this.spaceWidth = this.measureText(" ");
+        this.spaceWidth = this.measureText(" ").width;
       }
     }
 
