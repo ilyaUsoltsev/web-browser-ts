@@ -14,6 +14,7 @@ export class LayoutClass {
   totalHeight: number = 0;
   spaceWidth: number;
   measureCtx: CanvasRenderingContext2D;
+  measureTextCache: Record<string, { width: number; heigth: number }> = {};
 
   constructor() {
     this.measureCtx = new Canvas(1, 1).getContext("2d");
@@ -22,14 +23,19 @@ export class LayoutClass {
   }
 
   measureText(text: string): { width: number; heigth: number } {
+    if (this.measureTextCache[text]) {
+      return this.measureTextCache[text];
+    }
     const metrics = this.measureCtx.measureText(text);
-    return {
+    const result = {
       width: metrics.width,
       // font metrics, not glyph ink: every word in the same font gets the same height
       heigth: Math.round(
         metrics.fontBoundingBoxAscent + metrics.fontBoundingBoxDescent,
       ),
     };
+    this.measureTextCache[text] = result;
+    return result;
   }
 
   getFont(tokenFont: TokenFont): string {
