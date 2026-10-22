@@ -86,7 +86,7 @@ export class LayoutClass {
         if (token.name === "b") {
           currentFont = { ...currentFont, bold: true };
         } else if (token.name === "i") {
-          currentFont = { ...currentFont, italic: true, size: 34 };
+          currentFont = { ...currentFont, italic: true, size: 14 };
         } else if (token.name === "/b" || token.name === "/i") {
           currentFont = DEFAULT_FONT;
         } else if (token.name === "br" || token.name === "br /") {

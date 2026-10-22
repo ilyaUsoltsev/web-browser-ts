@@ -23,7 +23,7 @@ export const HSTEP = 10;
 export const VSTEP = 18;
 export const SCROLL_STEP = 100;
 export const LINE_HEIGHT_PADDING = 1;
-export const LINE_HEIGHT_MULTIPLIER = 1;
+export const LINE_HEIGHT_MULTIPLIER = 1.2;
 
 export const DEFAULT_FONT: TokenFont = {
   italic: false,
