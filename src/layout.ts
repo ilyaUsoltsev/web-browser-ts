@@ -14,7 +14,6 @@ export class LayoutClass {
   totalHeight: number = 0;
   spaceWidth: number;
   measureCtx: CanvasRenderingContext2D;
-  measureTextCache: Record<string, { width: number; heigth: number }> = {};
 
   constructor() {
     this.measureCtx = new Canvas(1, 1).getContext("2d");
@@ -23,9 +22,6 @@ export class LayoutClass {
   }
 
   measureText(text: string): { width: number; heigth: number } {
-    if (this.measureTextCache[text]) {
-      return this.measureTextCache[text];
-    }
     const metrics = this.measureCtx.measureText(text);
     const result = {
       width: metrics.width,
@@ -34,7 +30,6 @@ export class LayoutClass {
         metrics.fontBoundingBoxAscent + metrics.fontBoundingBoxDescent,
       ),
     };
-    this.measureTextCache[text] = result;
     return result;
   }
 
@@ -92,7 +87,7 @@ export class LayoutClass {
         if (token.name === "b") {
           currentFont = { ...currentFont, bold: true };
         } else if (token.name === "i") {
-          currentFont = { ...currentFont, italic: true, size: 14 };
+          currentFont = { ...currentFont, italic: true, size: 34 };
         } else if (token.name === "/b" || token.name === "/i") {
           currentFont = DEFAULT_FONT;
         } else if (token.name === "br" || token.name === "br /") {
