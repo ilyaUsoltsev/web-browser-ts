@@ -91,6 +91,14 @@ export class LayoutClass {
           currentFont = DEFAULT_FONT;
         } else if (token.name === "br" || token.name === "br /") {
           moveToNewLine();
+        } else if (token.name === "small") {
+          currentFont = { ...currentFont, size: 10 };
+        } else if (token.name === "/small") {
+          currentFont = DEFAULT_FONT;
+        } else if (token.name === "big") {
+          currentFont = { ...currentFont, size: 18 };
+        } else if (token.name === "/big") {
+          currentFont = DEFAULT_FONT;
         }
         this.measureCtx.font = this.getFont(currentFont);
         this.spaceWidth = this.measureText(" ").width;
@@ -109,7 +117,6 @@ export class LayoutClass {
         item.y = lineHeightSum;
       }
     });
-    console.log(lineHeights, "line heights after layout calculation");
     this.totalHeight = cursorY + VSTEP; // Add bottom padding in form of VSTEP
     this.displayList = displayLists.flat();
     return { displayList: this.displayList, totalHeight: this.totalHeight };
