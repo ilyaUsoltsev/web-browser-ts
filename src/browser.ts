@@ -63,7 +63,6 @@ export class Browser {
     const ctx = this.window.ctx;
     ctx.fillStyle = "white";
     ctx.fillRect(0, 0, this.window.width, this.window.height);
-    // Tk's create_text centers text on (x, y) by default; match that.
     ctx.fillStyle = "black";
 
     for (const { x, y, word, font } of this.layout.displayList) {

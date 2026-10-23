@@ -2,6 +2,7 @@ export type TokenFont = {
   italic: boolean;
   bold: boolean;
   size: number;
+  align: "left" | "center" | "right";
 };
 
 export type DisplayItem = {
@@ -9,5 +10,6 @@ export type DisplayItem = {
   y: number;
   word: string;
   font: string;
+  align: "left" | "center" | "right";
 };
 export type Layout = { displayList: DisplayItem[]; totalHeight: number };
