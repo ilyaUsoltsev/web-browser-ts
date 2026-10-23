@@ -114,6 +114,12 @@ export class LayoutClass {
         } else if (token.name === "/h1") {
           currentFont = DEFAULT_FONT;
           moveToNewLine();
+        } else if (token.name === "right") {
+          moveToNewLine();
+          currentFont = { ...currentFont, align: "right" };
+        } else if (token.name === "/right") {
+          currentFont = DEFAULT_FONT;
+          moveToNewLine();
         }
 
         this.measureCtx.font = this.getFont(currentFont);
@@ -134,6 +140,8 @@ export class LayoutClass {
         item.y = lineHeightSum;
         if (item.align === "center") {
           item.x = item.x + (windowWidth - HSTEP - lineWidth) / 2;
+        } else if (item.align === "right") {
+          item.x = item.x + (windowWidth - HSTEP - lineWidth);
         }
       }
     });
