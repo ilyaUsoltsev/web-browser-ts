@@ -1,7 +1,7 @@
 import { Window } from "skia-canvas";
 import type { URL } from "./url.ts";
 import { Parser } from "./parser.ts";
-import type { Element, Token } from "./tokens.ts";
+import type { Element } from "./tokens.ts";
 import { WIDTH, HSTEP, VSTEP, HEIGHT, SCROLL_STEP } from "./constants.ts";
 import { LayoutClass } from "./layout.ts";
 import type { Layout } from "./types.ts";
@@ -11,7 +11,6 @@ export class Browser {
   layout: Layout = { displayList: [], totalHeight: 0 };
   root: Element | undefined;
   scroll = 0;
-  tokens: Token[] = [];
   scrollbarHeight = 0;
   scrollbarY = 0;
   layoutClass: LayoutClass = new LayoutClass();
@@ -42,7 +41,9 @@ export class Browser {
     this.window.on("resize", (e) => {
       this.window.height = e.height;
       this.window.width = e.width;
-      this.layout = this.layoutClass.calculate(this.tokens, this.window.width);
+      if (this.root) {
+        this.layout = this.layoutClass.calculate(this.root, this.window.width);
+      }
       this.draw();
     });
   }
@@ -59,7 +60,7 @@ export class Browser {
         throw new Error("Failed to parse HTML");
       }
       parser.printTree(this.root);
-      this.layout = this.layoutClass.calculate(this.tokens, this.window.width);
+      this.layout = this.layoutClass.calculate(this.root, this.window.width);
     }
     this.draw();
   }

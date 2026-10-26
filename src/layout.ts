@@ -14,6 +14,14 @@ export class LayoutClass {
   totalHeight: number = 0;
   spaceWidth: number;
   measureCtx: CanvasRenderingContext2D;
+  currentFont: TokenFont = DEFAULT_FONT;
+  windowWidth: number = 0;
+  cursorX: number = HSTEP;
+  cursorY: number = VSTEP;
+  currentLineNumber: number = 0;
+  currentWordHeight: number = VSTEP;
+  lineHeights: number[] = [];
+  lines: { displayList: DisplayItem[]; lineWidth: number }[] = [];
 
   constructor() {
     this.measureCtx = new Canvas(1, 1).getContext("2d");
@@ -44,95 +52,22 @@ export class LayoutClass {
     return result;
   }
 
-  calculate(tokens: Token[], windowWidth: number): Layout {
-    let cursorX = HSTEP;
-    let cursorY = VSTEP;
-    this.displayList = [];
-    let currentFont = DEFAULT_FONT;
-    let currentLineNumber = 0;
-    let currentWordHeight = VSTEP;
-    let lineHeights: number[] = [];
-    const lines: { displayList: DisplayItem[]; lineWidth: number }[] = [];
+  calculate(tree: Token, windowWidth: number): Layout {
+    this.windowWidth = windowWidth;
+    this.cursorX = HSTEP;
+    this.cursorY = VSTEP;
+    this.currentLineNumber = 0;
+    this.currentWordHeight = VSTEP;
+    this.lineHeights = [];
+    this.lines = [];
+    this.setFont(DEFAULT_FONT);
 
-    for (const token of tokens) {
-      const moveToNewLine = () => {
-        lineHeights[currentLineNumber] =
-          currentWordHeight * LINE_HEIGHT_MULTIPLIER + LINE_HEIGHT_PADDING;
-        cursorY += lineHeights[currentLineNumber]!;
-        if (!lines[currentLineNumber]) {
-          lines[currentLineNumber] = { displayList: [], lineWidth: 0 };
-        }
-        lines[currentLineNumber]!.lineWidth = cursorX - HSTEP;
-        cursorX = HSTEP;
-        currentLineNumber++;
-        currentWordHeight = VSTEP;
-      };
-      if (token instanceof Text) {
-        for (const word of token.text.split(/\s+/)) {
-          const { width: wordWidth, heigth: wordHeight } =
-            this.measureText(word);
+    this.recurse(tree);
+    // setting the line height for the last line
+    this.lineHeights[this.currentLineNumber] = this.lineHeight();
 
-          if (cursorX + wordWidth >= windowWidth - HSTEP) {
-            moveToNewLine();
-          }
-          // after the wrap check, so a wrapped word only affects its own line
-          currentWordHeight = Math.max(currentWordHeight, wordHeight);
-
-          if (!lines[currentLineNumber]) {
-            lines[currentLineNumber] = { displayList: [], lineWidth: 0 };
-          }
-
-          lines[currentLineNumber]!.displayList.push({
-            x: cursorX,
-            y: cursorY,
-            word,
-            font: this.getFont(currentFont),
-            align: currentFont.align,
-          });
-          cursorX += wordWidth + this.spaceWidth;
-        }
-      } else if (token instanceof Element) {
-        if (token.name === "b") {
-          currentFont = { ...currentFont, bold: true };
-        } else if (token.name === "i") {
-          currentFont = { ...currentFont, italic: true, size: 34 };
-        } else if (token.name === "/b" || token.name === "/i") {
-          currentFont = DEFAULT_FONT;
-        } else if (token.name === "br" || token.name === "br /") {
-          moveToNewLine();
-        } else if (token.name === "small") {
-          currentFont = { ...currentFont, size: 10 };
-        } else if (token.name === "/small") {
-          currentFont = DEFAULT_FONT;
-        } else if (token.name === "big") {
-          currentFont = { ...currentFont, size: 18 };
-        } else if (token.name === "/big") {
-          currentFont = DEFAULT_FONT;
-        } else if (token.name === "h1") {
-          moveToNewLine();
-          currentFont = { ...currentFont, size: 48, align: "center" };
-        } else if (token.name === "/h1") {
-          currentFont = DEFAULT_FONT;
-          moveToNewLine();
-        } else if (token.name === "right") {
-          moveToNewLine();
-          currentFont = { ...currentFont, align: "right" };
-        } else if (token.name === "/right") {
-          currentFont = DEFAULT_FONT;
-          moveToNewLine();
-        }
-
-        this.measureCtx.font = this.getFont(currentFont);
-        this.spaceWidth = this.measureText(" ").width;
-      }
-
-      // setting the line height for the last line
-      lineHeights[currentLineNumber] =
-        currentWordHeight * LINE_HEIGHT_MULTIPLIER + LINE_HEIGHT_PADDING;
-    }
-
-    lines.forEach(({ displayList: line, lineWidth }, i) => {
-      const lineHeightSum = lineHeights
+    this.lines.forEach(({ displayList: line, lineWidth }, i) => {
+      const lineHeightSum = this.lineHeights
         .slice(0, i + 1)
         .reduce((a, b) => a + b, 0);
       for (const item of line) {
@@ -145,8 +80,108 @@ export class LayoutClass {
       }
     });
 
-    this.totalHeight = cursorY + VSTEP; // Add bottom padding in form of VSTEP
-    this.displayList = lines.flatMap((line) => line.displayList);
+    this.totalHeight = this.cursorY + VSTEP; // Add bottom padding in form of VSTEP
+    this.displayList = this.lines.flatMap((line) => line.displayList);
     return { displayList: this.displayList, totalHeight: this.totalHeight };
+  }
+
+  recurse(tree: Token) {
+    if (tree instanceof Text) {
+      for (const word of tree.text.split(/\s+/)) {
+        if (word) {
+          this.word(word);
+        }
+      }
+    } else {
+      this.openTag(tree);
+      for (const child of tree.children) {
+        this.recurse(child);
+      }
+      this.closeTag(tree);
+    }
+  }
+
+  word(word: string) {
+    const { width: wordWidth, heigth: wordHeight } = this.measureText(word);
+
+    if (this.cursorX + wordWidth >= this.windowWidth - HSTEP) {
+      this.newLine();
+    }
+    // after the wrap check, so a wrapped word only affects its own line
+    this.currentWordHeight = Math.max(this.currentWordHeight, wordHeight);
+
+    this.currentLine().displayList.push({
+      x: this.cursorX,
+      y: this.cursorY,
+      word,
+      font: this.getFont(this.currentFont),
+      align: this.currentFont.align,
+    });
+    this.cursorX += wordWidth + this.spaceWidth;
+  }
+
+  newLine() {
+    this.lineHeights[this.currentLineNumber] = this.lineHeight();
+    this.cursorY += this.lineHeights[this.currentLineNumber]!;
+    this.currentLine().lineWidth = this.cursorX - HSTEP;
+    this.cursorX = HSTEP;
+    this.currentLineNumber++;
+    this.currentWordHeight = VSTEP;
+  }
+
+  openTag(token: Element) {
+    if (token.name === "b") {
+      this.setFont({ ...this.currentFont, bold: true });
+    } else if (token.name === "i") {
+      this.setFont({ ...this.currentFont, italic: true, size: 34 });
+    } else if (token.name === "small") {
+      this.setFont({ ...this.currentFont, size: 10 });
+    } else if (token.name === "big") {
+      this.setFont({ ...this.currentFont, size: 18 });
+    } else if (token.name === "br") {
+      this.newLine();
+    } else if (token.name === "h1") {
+      this.newLine();
+      this.setFont({ ...this.currentFont, size: 48, align: "center" });
+    } else if (token.name === "right") {
+      this.newLine();
+      this.setFont({ ...this.currentFont, align: "right" });
+    }
+  }
+
+  closeTag(token: Element) {
+    if (token.name === "b") {
+      this.setFont({ ...this.currentFont, bold: false });
+    } else if (token.name === "i") {
+      this.setFont({
+        ...this.currentFont,
+        italic: false,
+        size: DEFAULT_FONT.size,
+      });
+    } else if (token.name === "small" || token.name === "big") {
+      this.setFont({ ...this.currentFont, size: DEFAULT_FONT.size });
+    } else if (token.name === "h1" || token.name === "right") {
+      this.setFont(DEFAULT_FONT);
+      this.newLine();
+    }
+  }
+
+  private setFont(font: TokenFont) {
+    this.currentFont = font;
+    this.measureCtx.font = this.getFont(font);
+    this.spaceWidth = this.measureText(" ").width;
+  }
+
+  private lineHeight(): number {
+    return (
+      this.currentWordHeight * LINE_HEIGHT_MULTIPLIER + LINE_HEIGHT_PADDING
+    );
+  }
+
+  private currentLine() {
+    if (!this.lines[this.currentLineNumber]) {
+      this.lines[this.currentLineNumber] = { displayList: [], lineWidth: 0 };
+    }
+    return this.lines[this.currentLineNumber]!;
   }
 }

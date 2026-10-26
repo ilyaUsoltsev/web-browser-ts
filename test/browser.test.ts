@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { LayoutClass } from "../src/layout.ts";
-import { Text, Tag } from "../src/tokens.ts";
+import { Text, Element } from "../src/tokens.ts";
 import {
   DEFAULT_FONT,
   HSTEP,
@@ -10,6 +10,9 @@ import {
   VSTEP,
   WIDTH,
 } from "../src/constants.ts";
+
+const body = (...children: (Text | Element)[]) =>
+  new Element("body", {}, null, children);
 
 // baseline of the first line: one line height below the top
 function firstLineY(layout: LayoutClass, words: string[]): number {
@@ -22,16 +25,17 @@ function firstLineY(layout: LayoutClass, words: string[]): number {
 
 test("LayoutClass places words left to right on one line", () => {
   const layout = new LayoutClass();
-  const { displayList } = layout.calculate([new Text("ab cd")], WIDTH);
+  const { displayList } = layout.calculate(body(new Text("ab cd")), WIDTH);
   const y = firstLineY(layout, ["ab", "cd"]);
   const font = layout.getFont(DEFAULT_FONT);
   assert.deepEqual(displayList, [
-    { x: HSTEP, y, word: "ab", font },
+    { x: HSTEP, y, word: "ab", font, align: "left" },
     {
       x: HSTEP + layout.measureText("ab").width + layout.spaceWidth,
       y,
       word: "cd",
       font,
+      align: "left",
     },
   ]);
 });
@@ -39,7 +43,7 @@ test("LayoutClass places words left to right on one line", () => {
 test("LayoutClass ignores tags", () => {
   const layout = new LayoutClass();
   const { displayList } = layout.calculate(
-    [new Tag("p"), new Text("a"), new Tag("/p")],
+    body(new Element("p", {}, null, [new Text("a")])),
     WIDTH,
   );
   assert.deepEqual(displayList, [
@@ -48,6 +52,7 @@ test("LayoutClass ignores tags", () => {
       y: firstLineY(layout, ["a"]),
       word: "a",
       font: layout.getFont(DEFAULT_FONT),
+      align: "left",
     },
   ]);
 });
@@ -55,7 +60,7 @@ test("LayoutClass ignores tags", () => {
 test("LayoutClass wraps at the window width", () => {
   const layout = new LayoutClass();
   const { displayList, totalHeight } = layout.calculate(
-    [new Text("word ".repeat(200))],
+    body(new Text("word ".repeat(200))),
     WIDTH,
   );
   const ys = new Set(displayList.map((item) => item.y));
@@ -66,7 +71,7 @@ test("LayoutClass wraps at the window width", () => {
 
 test("LayoutClass wraps earlier in a narrower window", () => {
   const layout = new LayoutClass();
-  const tokens = [new Text("word ".repeat(200))];
+  const tokens = body(new Text("word ".repeat(200)));
   const wide = layout.calculate(tokens, WIDTH).totalHeight;
   const narrow = layout.calculate(tokens, WIDTH / 2).totalHeight;
   assert.ok(narrow > wide);
