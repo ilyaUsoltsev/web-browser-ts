@@ -105,21 +105,14 @@ export class Parser {
       this.unfinished.pop();
     } else {
       const { tag, attributes } = this.getAttributes(name);
-      if (SELF_CLOSING_TAGS.includes(tag)) {
-        const element = new Element(tag, attributes);
-        const parent = this.unfinished[this.unfinished.length - 1];
-        if (parent) {
-          parent.children.push(element);
-        }
-        this.currentElement = "";
-        return;
-      }
       const element = new Element(tag, attributes);
       const parent = this.unfinished[this.unfinished.length - 1];
       if (parent) {
         parent.children.push(element);
       }
-      this.unfinished.push(element);
+      if (!SELF_CLOSING_TAGS.includes(tag)) {
+        this.unfinished.push(element);
+      }
     }
     this.currentElement = "";
   }
