@@ -1,23 +1,22 @@
 import { test } from "node:test";
 import { Parser } from "../src/parser.ts";
-import { Text, Tag } from "../src/tokens.ts";
+import { Text, Element } from "../src/tokens.ts";
 import assert from "node:assert/strict";
 
 function parse(body: string) {
   const parser = new Parser(body);
-  parser.process();
-  return parser.getTokens();
+  return parser.parse();
 }
 
 test("Parser processes HTML correctly", () => {
   assert.deepEqual(parse("<p>a<i>b</i>c</p>"), [
-    new Tag("p"),
+    new Element("p"),
     new Text("a"),
-    new Tag("i"),
+    new Element("i"),
     new Text("b"),
-    new Tag("/i"),
+    new Element("/i"),
     new Text("c"),
-    new Tag("/p"),
+    new Element("/p"),
   ]);
 });
 
@@ -31,9 +30,9 @@ test("Parser parses &amp; correctly", () => {
 
 test("Parser parses &lt; and &gt; correctly", () => {
   assert.deepEqual(parse("<p>&lt;b&gt;</p>"), [
-    new Tag("p"),
+    new Element("p"),
     new Text("<b>"),
-    new Tag("/p"),
+    new Element("/p"),
   ]);
 });
 

@@ -1,4 +1,4 @@
-import { Text, Tag } from "./tokens.ts";
+import { Text, Element } from "./tokens.ts";
 import type { Token } from "./tokens.ts";
 
 export class Parser {
@@ -8,6 +8,7 @@ export class Parser {
   private result: Token[];
   currentElement: string;
   isInTag: boolean;
+  unfinished: Element[];
 
   constructor(body: string) {
     this.body = body;
@@ -16,22 +17,21 @@ export class Parser {
     this.result = [];
     this.isInTag = false;
     this.currentElement = "";
+    this.unfinished = [];
   }
 
-  process(): void {
+  parse(): Element | undefined {
     while (this.counter < this.maxCounter) {
       if (this.body[this.counter] === "<") {
-        if (this.currentElement) {
-          this.result.push(new Text(this.currentElement.trim()));
-          this.currentElement = "";
+        if (this.currentElement.trim()) {
+          this.addText(this.currentElement.trim());
         }
         this.isInTag = true;
         this.proceed();
         continue;
       } else if (this.isInTag && this.body[this.counter] === ">") {
         if (this.currentElement) {
-          this.result.push(new Tag(this.currentElement.trim()));
-          this.currentElement = "";
+          this.addTag(this.currentElement.trim());
         }
         this.isInTag = false;
         this.proceed();
@@ -56,16 +56,67 @@ export class Parser {
 
       this.consume();
     }
-    if (this.currentElement) {
-      this.result.push(new Text(this.currentElement.trim()));
-      this.currentElement = "";
+    if (this.currentElement.trim()) {
+      this.addText(this.currentElement.trim());
     }
+    console.log(this.unfinished, "unfinished");
+    return this.finish();
   }
 
-  getTokens(): (Tag | Text)[] {
-    return this.result.filter((item) =>
-      item instanceof Text ? item.text !== "" : true,
-    );
+  finish() {
+    while (this.unfinished.length > 1) {
+      const node = this.unfinished.pop();
+      if (node) {
+        if (this.unfinished.length > 0) {
+          const parent = this.unfinished[this.unfinished.length - 1];
+          if (parent) {
+            parent.children.push(node);
+          }
+        }
+      }
+    }
+    return this.unfinished.pop();
+  }
+
+  addText(text: string): void {
+    const parent = this.unfinished[this.unfinished.length - 1];
+    const node = new Text(text);
+    if (!parent) {
+      throw new Error("Cannot add text outside of an element");
+    }
+    parent.children.push(node);
+    this.currentElement = "";
+  }
+
+  addTag(name: string): void {
+    if (name.startsWith("/")) {
+      if (this.unfinished.length === 1) {
+        // Do not pop the last element if it's the only one left
+        // We'd need it in finish method to return the root.
+        return;
+      }
+      this.unfinished.pop();
+    } else {
+      const element = new Element(name);
+      const parent = this.unfinished[this.unfinished.length - 1];
+      if (parent) {
+        parent.children.push(element);
+      }
+      this.unfinished.push(element);
+    }
+    this.currentElement = "";
+  }
+
+  printTree(node: Element, indent: string = ""): void {
+    console.log(`${indent}<${node.name}>`);
+    for (const child of node.children) {
+      if (child instanceof Element) {
+        this.printTree(child, indent + "  ");
+      } else if (child instanceof Text) {
+        console.log(indent + "  " + child.text);
+      }
+    }
+    console.log(`${indent}</${node.name}>`);
   }
 
   private proceed(): void {

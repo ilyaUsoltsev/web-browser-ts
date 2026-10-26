@@ -6,7 +6,7 @@ import {
   LINE_HEIGHT_PADDING,
   LINE_HEIGHT_MULTIPLIER,
 } from "./constants.ts";
-import { type Token, Text, Tag } from "./tokens.ts";
+import { type Token, Text, Element } from "./tokens.ts";
 import { Canvas, CanvasRenderingContext2D } from "skia-canvas";
 
 export class LayoutClass {
@@ -91,7 +91,7 @@ export class LayoutClass {
           });
           cursorX += wordWidth + this.spaceWidth;
         }
-      } else if (token instanceof Tag) {
+      } else if (token instanceof Element) {
         if (token.name === "b") {
           currentFont = { ...currentFont, bold: true };
         } else if (token.name === "i") {
@@ -130,7 +130,6 @@ export class LayoutClass {
       lineHeights[currentLineNumber] =
         currentWordHeight * LINE_HEIGHT_MULTIPLIER + LINE_HEIGHT_PADDING;
     }
-    console.log(lines.map((line) => line.lineWidth));
 
     lines.forEach(({ displayList: line, lineWidth }, i) => {
       const lineHeightSum = lineHeights
