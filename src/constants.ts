@@ -1,5 +1,17 @@
 import type { TokenFont } from "./types.ts";
 
+export const HEAD_TAGS = [
+  "title",
+  "meta",
+  "link",
+  "style",
+  "bgsound",
+  "script",
+  "noscript",
+  "base",
+  "basefont",
+];
+
 export const SELF_CLOSING_TAGS = [
   "area",
   "base",

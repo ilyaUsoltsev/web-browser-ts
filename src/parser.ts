@@ -1,4 +1,4 @@
-import { SELF_CLOSING_TAGS } from "./constants.ts";
+import { HEAD_TAGS, SELF_CLOSING_TAGS } from "./constants.ts";
 import { Text, Element } from "./tokens.ts";
 import type { Token } from "./tokens.ts";
 
@@ -66,21 +66,18 @@ export class Parser {
   }
 
   finish() {
-    while (this.unfinished.length > 1) {
-      const node = this.unfinished.pop();
-      if (node) {
-        if (this.unfinished.length > 0) {
-          const parent = this.unfinished[this.unfinished.length - 1];
-          if (parent) {
-            parent.children.push(node);
-          }
-        }
-      }
+    if (this.unfinished.length === 0) {
+      this.missingTags();
     }
-    return this.unfinished.pop();
+    // Children are attached to their parent when opened in addTag,
+    // so the root already holds the whole tree.
+    const root = this.unfinished[0];
+    this.unfinished = [];
+    return root;
   }
 
   addText(text: string): void {
+    this.missingTags();
     const parent = this.unfinished[this.unfinished.length - 1];
     const node = new Text(text);
     if (!parent) {
@@ -95,6 +92,9 @@ export class Parser {
       this.currentElement = "";
       return;
     }
+
+    // Add html/head/body if the document skipped them
+    this.missingTags(name.split(/\s+/)[0]);
 
     if (name.startsWith("/")) {
       if (this.unfinished.length === 1) {
@@ -169,10 +169,40 @@ export class Parser {
     return { tag: parts[0] ?? "", attributes };
   }
 
-  private peek(): string | undefined {
-    if (this.counter + 1 < this.maxCounter) {
-      return this.body[this.counter + 1];
+  private missingTags(tag: string = ""): void {
+    while (true) {
+      const openTags = this.unfinished.map((el) => el.name);
+      const hasHead = !!this.unfinished[0]?.children.some(
+        (child) => child instanceof Element && child.name === "head",
+      );
+      if (openTags.length === 0 && tag !== "html") {
+        this.addTag("html");
+      } else if (
+        openTags.length === 1 &&
+        openTags[0] === "html" &&
+        !hasHead &&
+        tag !== "head"
+      ) {
+        // Always create a head first, even if it stays empty
+        this.addTag("head");
+      } else if (
+        openTags.length === 1 &&
+        openTags[0] === "html" &&
+        hasHead &&
+        !["body", "/html"].includes(tag)
+      ) {
+        this.addTag("body");
+      } else if (
+        openTags.length === 2 &&
+        openTags[0] === "html" &&
+        openTags[1] === "head" &&
+        !["/head", ...HEAD_TAGS].includes(tag)
+      ) {
+        // A non-head tag (or text) means the head is over
+        this.addTag("/head");
+      } else {
+        break;
+      }
     }
-    return undefined;
   }
 }
