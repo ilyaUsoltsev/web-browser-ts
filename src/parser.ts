@@ -1,3 +1,4 @@
+import { SELF_CLOSING_TAGS } from "./constants.ts";
 import { Text, Element } from "./tokens.ts";
 import type { Token } from "./tokens.ts";
 
@@ -56,9 +57,10 @@ export class Parser {
 
       this.consume();
     }
-    if (this.currentElement.trim()) {
-      this.addText(this.currentElement.trim());
-    }
+    // Look like we don't need to add the remaining text as a separate node here
+    // if (this.currentElement.trim()) {
+    //   this.addText(this.currentElement.trim());
+    // }
     console.log(this.unfinished, "unfinished");
     return this.finish();
   }
@@ -89,6 +91,11 @@ export class Parser {
   }
 
   addTag(name: string): void {
+    if (name.startsWith("!")) {
+      this.currentElement = "";
+      return;
+    }
+
     if (name.startsWith("/")) {
       if (this.unfinished.length === 1) {
         // Do not pop the last element if it's the only one left
@@ -97,7 +104,17 @@ export class Parser {
       }
       this.unfinished.pop();
     } else {
-      const element = new Element(name);
+      const { tag, attributes } = this.getAttributes(name);
+      if (SELF_CLOSING_TAGS.includes(tag)) {
+        const element = new Element(tag, attributes);
+        const parent = this.unfinished[this.unfinished.length - 1];
+        if (parent) {
+          parent.children.push(element);
+        }
+        this.currentElement = "";
+        return;
+      }
+      const element = new Element(tag, attributes);
       const parent = this.unfinished[this.unfinished.length - 1];
       if (parent) {
         parent.children.push(element);
@@ -116,7 +133,7 @@ export class Parser {
         console.log(indent + "  " + child.text);
       }
     }
-    console.log(`${indent}</${node.name}>`);
+    // console.log(`${indent}</${node.name}>`);
   }
 
   private proceed(): void {
@@ -133,6 +150,23 @@ export class Parser {
       this.body.slice(this.counter, this.counter + substring.length) ===
       substring
     );
+  }
+
+  private getAttributes(text: string) {
+    const parts = text.split(/\s+/);
+    const attributes: Element["attributes"] = {};
+    for (let i = 1; i < parts.length; i++) {
+      const keyValue = parts[i]?.split("=");
+      const key = keyValue?.[0];
+      const value = keyValue?.[1];
+      if (key && !value) {
+        attributes[key] = null;
+      }
+      if (key && value) {
+        attributes[key] = value.replace(/['"]/g, "");
+      }
+    }
+    return { tag: parts[0] ?? "", attributes };
   }
 
   private peek(): string | undefined {
