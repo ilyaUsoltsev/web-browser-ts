@@ -6,12 +6,14 @@
 
 import { Browser } from "./browser.ts";
 import { parseUrl, load } from "./url.ts";
+import path from "path";
 
+const userName = path.basename(process.env.HOME ?? "");
 // const dp = "about:blank";
 // const dp = "http://browser.engineering/redirect";
-const dp = "file:///Users/ilyau/Desktop/web-browser-ts/index.html";
+const dp = `file:///Users/${userName}/Desktop/web-browser-ts/index.html`;
 // const dp = "data:text/html,<b>Hello world!</b>";
-// const dp = "view-source:file:///Users/ilyau/Desktop/web-browser-ts/index.html";
+// const dp = `view-source:file:///Users/${userName}/Desktop/web-browser-ts/index.html`;
 // const dp = "view-source:https://ilyausoltsev.com/";
 
 const args = process.argv.slice(2);
