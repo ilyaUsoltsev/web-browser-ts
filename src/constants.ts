@@ -1,5 +1,3 @@
-import type { TokenFont } from "./types.ts";
-
 export const HEAD_TAGS = [
   "title",
   "meta",
@@ -37,9 +35,44 @@ export const SCROLL_STEP = 100;
 export const LINE_HEIGHT_PADDING = 1;
 export const LINE_HEIGHT_MULTIPLIER = 1;
 
-export const DEFAULT_FONT: TokenFont = {
-  italic: false,
-  bold: false,
-  size: 14,
-  align: "left",
-};
+export const DEFAULT_FONT_SIZE = 14;
+
+export const BLOCK_ELEMENTS = [
+  "html",
+  "body",
+  "article",
+  "section",
+  "nav",
+  "aside",
+  "h1",
+  "h2",
+  "h3",
+  "h4",
+  "h5",
+  "h6",
+  "hgroup",
+  "header",
+  "footer",
+  "address",
+  "p",
+  "hr",
+  "pre",
+  "blockquote",
+  "ol",
+  "ul",
+  "menu",
+  "li",
+  "dl",
+  "dt",
+  "dd",
+  "figure",
+  "figcaption",
+  "main",
+  "div",
+  "table",
+  "form",
+  "fieldset",
+  "legend",
+  "details",
+  "summary",
+];

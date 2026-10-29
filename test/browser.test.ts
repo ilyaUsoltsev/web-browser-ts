@@ -1,78 +1,94 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { LayoutClass } from "../src/layout.ts";
+import { BlockLayout, DocumentLayout, paintTree } from "../src/layout.ts";
+import { DrawRect, DrawText } from "../src/draw.ts";
+import { getFont } from "../src/fonts.ts";
 import { Text, Element } from "../src/tokens.ts";
 import {
-  DEFAULT_FONT,
+  DEFAULT_FONT_SIZE,
   HSTEP,
   LINE_HEIGHT_MULTIPLIER,
-  LINE_HEIGHT_PADDING,
   VSTEP,
   WIDTH,
 } from "../src/constants.ts";
+import type { DrawCommand } from "../src/types.ts";
 
-const body = (...children: (Text | Element)[]) =>
-  new Element("body", {}, null, children);
+const el = (name: string, ...children: (Text | Element)[]) =>
+  new Element(name, {}, null, children);
 
-// baseline of the first line: one line height below the top
-function firstLineY(layout: LayoutClass, words: string[]): number {
-  const height = Math.max(
-    VSTEP,
-    ...words.map((word) => layout.measureText(word).heigth),
-  );
-  return height * LINE_HEIGHT_MULTIPLIER + LINE_HEIGHT_PADDING;
+function render(root: Element, width = WIDTH) {
+  const document = new DocumentLayout(root);
+  document.layout(width);
+  const displayList: DrawCommand[] = [];
+  paintTree(document, displayList);
+  return { document, displayList };
 }
 
-test("LayoutClass places words left to right on one line", () => {
-  const layout = new LayoutClass();
-  const { displayList } = layout.calculate(body(new Text("ab cd")), WIDTH);
-  const y = firstLineY(layout, ["ab", "cd"]);
-  const font = layout.getFont(DEFAULT_FONT);
-  assert.deepEqual(displayList, [
-    { x: HSTEP, y, word: "ab", font, align: "left" },
-    {
-      x: HSTEP + layout.measureText("ab").width + layout.spaceWidth,
-      y,
-      word: "cd",
-      font,
-      align: "left",
-    },
-  ]);
+const texts = (displayList: DrawCommand[]) =>
+  displayList.filter((cmd): cmd is DrawText => cmd instanceof DrawText);
+
+test("getFont caches fonts", () => {
+  assert.equal(
+    getFont(14, "bold", "italic"),
+    getFont(14, "bold", "italic"),
+  );
+  assert.notEqual(getFont(14, "bold", "roman"), getFont(14, "normal", "roman"));
 });
 
-test("LayoutClass ignores tags", () => {
-  const layout = new LayoutClass();
-  const { displayList } = layout.calculate(
-    body(new Element("p", {}, null, [new Text("a")])),
-    WIDTH,
+test("places words left to right on one line", () => {
+  const { displayList } = render(el("body", new Text("ab cd")));
+  const font = getFont(DEFAULT_FONT_SIZE, "normal", "roman");
+  const y = VSTEP + LINE_HEIGHT_MULTIPLIER * font.ascent - font.ascent;
+  const [ab, cd] = texts(displayList);
+  assert.equal(texts(displayList).length, 2);
+  assert.deepEqual([ab!.left, ab!.top, ab!.text], [HSTEP, y, "ab"]);
+  assert.deepEqual(
+    [cd!.left, cd!.top, cd!.text],
+    [HSTEP + font.measure("ab") + font.measure(" "), y, "cd"],
   );
-  assert.deepEqual(displayList, [
-    {
-      x: HSTEP,
-      y: firstLineY(layout, ["a"]),
-      word: "a",
-      font: layout.getFont(DEFAULT_FONT),
-      align: "left",
-    },
-  ]);
 });
 
-test("LayoutClass wraps at the window width", () => {
-  const layout = new LayoutClass();
-  const { displayList, totalHeight } = layout.calculate(
-    body(new Text("word ".repeat(200))),
-    WIDTH,
+test("layoutMode is block when a child is a block element", () => {
+  const document = new DocumentLayout(
+    el("body", el("p", new Text("a")), el("p", new Text("b"))),
   );
-  const ys = new Set(displayList.map((item) => item.y));
+  document.layout();
+  const body = document.children[0]!;
+  assert.equal(body.layoutMode(), "block");
+  assert.equal(body.children.length, 2);
+  for (const p of body.children) assert.equal(p.layoutMode(), "inline");
+});
+
+test("block children stack vertically", () => {
+  const { document, displayList } = render(
+    el("body", el("p", new Text("a")), el("p", new Text("b"))),
+  );
+  const [p1, p2] = document.children[0]!.children as BlockLayout[];
+  assert.equal(p2!.y, p1!.y + p1!.height);
+  assert.equal(document.height, p1!.height + p2!.height);
+  const [a, b] = texts(displayList);
+  assert.ok(b!.top > a!.top);
+});
+
+test("pre gets a gray background", () => {
+  const { displayList } = render(el("body", el("pre", new Text("code"))));
+  assert.ok(displayList[0] instanceof DrawRect);
+  assert.equal((displayList[0] as DrawRect).color, "gray");
+});
+
+test("wraps at the window width", () => {
+  const { document, displayList } = render(
+    el("body", new Text("word ".repeat(200))),
+  );
+  const ys = new Set(texts(displayList).map((cmd) => cmd.top));
   assert.ok(ys.size > 1);
-  for (const { x } of displayList) assert.ok(x < WIDTH - HSTEP);
-  assert.ok(totalHeight > Math.max(...ys));
+  for (const cmd of texts(displayList)) assert.ok(cmd.left < WIDTH - HSTEP);
+  assert.ok(document.y + document.height > Math.max(...ys));
 });
 
-test("LayoutClass wraps earlier in a narrower window", () => {
-  const layout = new LayoutClass();
-  const tokens = body(new Text("word ".repeat(200)));
-  const wide = layout.calculate(tokens, WIDTH).totalHeight;
-  const narrow = layout.calculate(tokens, WIDTH / 2).totalHeight;
+test("wraps earlier in a narrower window", () => {
+  const root = el("body", new Text("word ".repeat(200)));
+  const wide = render(root, WIDTH).document.height;
+  const narrow = render(root, WIDTH / 2).document.height;
   assert.ok(narrow > wide);
 });
