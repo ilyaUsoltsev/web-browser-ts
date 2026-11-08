@@ -57,11 +57,9 @@ export class Parser {
 
       this.consume();
     }
-    // Look like we don't need to add the remaining text as a separate node here
-    // if (this.currentElement.trim()) {
-    //   this.addText(this.currentElement.trim());
-    // }
-    console.log(this.unfinished, "unfinished");
+    if (!this.isInTag && this.currentElement.trim()) {
+      this.addText(this.currentElement.trim());
+    }
     return this.finish();
   }
 
@@ -79,10 +77,10 @@ export class Parser {
   addText(text: string): void {
     this.missingTags();
     const parent = this.unfinished[this.unfinished.length - 1];
-    const node = new Text(text);
     if (!parent) {
       throw new Error("Cannot add text outside of an element");
     }
+    const node = new Text(text, parent);
     parent.children.push(node);
     this.currentElement = "";
   }
@@ -105,8 +103,8 @@ export class Parser {
       this.unfinished.pop();
     } else {
       const { tag, attributes } = this.getAttributes(name);
-      const element = new Element(tag, attributes);
       const parent = this.unfinished[this.unfinished.length - 1];
+      const element = new Element(tag, attributes, parent ?? null);
       if (parent) {
         parent.children.push(element);
       }

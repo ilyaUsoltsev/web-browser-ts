@@ -1,3 +1,5 @@
+import { inspect } from "node:util";
+
 export class Text {
   text: string;
   children: Token[] = [];
@@ -10,6 +12,14 @@ export class Text {
     this.text = text;
     this.children = children;
     this.parent = parent;
+  }
+
+  toString(): string {
+    return JSON.stringify(this.text);
+  }
+
+  [inspect.custom](): string {
+    return this.toString();
   }
 }
 
@@ -28,6 +38,17 @@ export class Element {
     this.attributes = attributes;
     this.parent = parent;
     this.children = children;
+  }
+
+  toString(): string {
+    const attributes = Object.entries(this.attributes).map(([name, value]) =>
+      value === null ? name : `${name}=${JSON.stringify(value)}`,
+    );
+    return `<${[this.name, ...attributes].join(" ")}>`;
+  }
+
+  [inspect.custom](): string {
+    return this.toString();
   }
 }
 
