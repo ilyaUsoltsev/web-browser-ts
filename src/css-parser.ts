@@ -1,4 +1,4 @@
-class CSSParser {
+export class CSSParser {
   constructor(
     private text: string,
     private position: number = 0,
@@ -14,6 +14,9 @@ class CSSParser {
     let start = this.position;
     while (this.position < this.text.length && /[a-zA-Z0-9_-]/.test(this.text[this.position]!)) {
       this.position++;
+    }
+    if (this.position === start) {
+      throw new Error(`Expected word at position ${this.position}`);
     }
     return this.text.slice(start, this.position);
   }
@@ -35,4 +38,38 @@ class CSSParser {
     return { property, value };
   }
 
+  ignoreUntil(chars: readonly string[]): string | null {
+    while (this.position < this.text.length) {
+      const char = this.text[this.position]!;
+      if (chars.includes(char)) {
+        return char;
+      }
+      this.position++;
+    }
+    return null;
+  }
+
+  body(): Record<string, string> {
+    const pairs: Record<string, string> = {};
+    this.whitespace();
+    while (this.position < this.text.length) {
+      try {
+        const { property, value } = this.pair();
+        this.whitespace();
+        if (this.position < this.text.length) {
+          this.literal(";");
+        }
+        pairs[property] = value;
+        this.whitespace();
+      } catch {
+        // Unsupported or malformed declarations are skipped independently.
+        if (this.ignoreUntil([";"]) !== ";") {
+          break;
+        }
+        this.literal(";");
+        this.whitespace();
+      }
+    }
+    return pairs;
+  }
 }

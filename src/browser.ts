@@ -56,7 +56,7 @@ export class Browser {
       if (!root) {
         throw new Error("Failed to parse HTML");
       }
-      parser.printTree(root);
+      // parser.printTree(root);
       this.document = new DocumentLayout(root);
       this.layout();
     }
