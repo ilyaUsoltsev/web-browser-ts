@@ -20,9 +20,7 @@ function parse(body: string): Element {
 
 // Compare structure separately from the circular parent references.
 function tree(node: Token): unknown {
-  return node instanceof Text
-    ? node.text
-    : [node.name, node.attributes, node.children.map(tree)];
+  return node instanceof Text ? node.text : [node.name, node.attributes, node.children.map(tree)];
 }
 
 function bodyOf(source: string): Element {
@@ -35,7 +33,9 @@ function bodyOf(source: string): Element {
 
 test("Parser builds a nested HTML tree with implicit containers", () => {
   assert.deepEqual(tree(parse("<p>a<i>b</i>c</p>")), [
-    "html", {}, [
+    "html",
+    {},
+    [
       ["head", {}, []],
       ["body", {}, [["p", {}, ["a", ["i", {}, ["b"]], "c"]]]],
     ],
@@ -57,19 +57,20 @@ test("Parser clears closing root tags before processing trailing input", () => {
 
 test("Parser processes empty HTML with an implicit document", () => {
   assert.deepEqual(tree(parse("")), [
-    "html", {}, [["head", {}, []], ["body", {}, []]],
+    "html",
+    {},
+    [
+      ["head", {}, []],
+      ["body", {}, []],
+    ],
   ]);
 });
 
 test("Parser preserves trailing text and decodes entities", () => {
   assert.deepEqual(tree(bodyOf("&amp;")), ["body", {}, ["&"]]);
   assert.deepEqual(tree(bodyOf("<p>Hello")), ["body", {}, [["p", {}, ["Hello"]]]]);
-  assert.deepEqual(tree(bodyOf("<p>first</p>last")), [
-    "body", {}, [["p", {}, ["first"]], "last"],
-  ]);
-  assert.deepEqual(tree(bodyOf("<p>&lt;b&gt;</p>")), [
-    "body", {}, [["p", {}, ["<b>"]]],
-  ]);
+  assert.deepEqual(tree(bodyOf("<p>first</p>last")), ["body", {}, [["p", {}, ["first"]], "last"]]);
+  assert.deepEqual(tree(bodyOf("<p>&lt;b&gt;</p>")), ["body", {}, [["p", {}, ["<b>"]]]]);
 });
 
 test("Parser ignores empty tags and unfinished tag text", () => {
@@ -78,11 +79,15 @@ test("Parser ignores empty tags and unfinished tag text", () => {
 });
 
 test("Parser assigns parents to explicit elements and void elements", () => {
-  const root = parse('<html><head><title>Title</title></head><body><p id="intro">Hello<br>world</p></body></html>');
+  const root = parse(
+    '<html><head><title>Title</title></head><body><p id="intro">Hello<br>world</p></body></html>',
+  );
   assert.equal(root.name, "html");
   const body = root.children[1] as Element;
   assert.deepEqual(tree(body), [
-    "body", {}, [["p", { id: "intro" }, ["Hello", ["br", {}, []], "world"]]],
+    "body",
+    {},
+    [["p", { id: "intro" }, ["Hello", ["br", {}, []], "world"]]],
   ]);
 });
 

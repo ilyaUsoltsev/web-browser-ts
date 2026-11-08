@@ -3,8 +3,7 @@ import { Socket } from "./socket.ts";
 
 function split1(s: string, sep: string): [string, string] {
   const i = s.indexOf(sep);
-  if (i === -1)
-    throw new Error(`expected ${JSON.stringify(sep)} in ${JSON.stringify(s)}`);
+  if (i === -1) throw new Error(`expected ${JSON.stringify(sep)} in ${JSON.stringify(s)}`);
   return [s.slice(0, i), s.slice(i + sep.length)];
 }
 
@@ -24,10 +23,7 @@ function matchSchemePrefix(url: string, scheme: string): string | undefined {
 
 // tls.connect plays the role of ssl's ctx.wrap_socket(s, server_hostname=host).
 // `servername` sets SNI, which servers hosting many sites need.
-async function networkRequest(
-  url: URL,
-  secure: boolean,
-): ReturnType<SchemeStrategy["request"]> {
+async function networkRequest(url: URL, secure: boolean): ReturnType<SchemeStrategy["request"]> {
   const cachedResponse = responseCache.get(url.host + url.path);
   if (cachedResponse) {
     return Promise.resolve(cachedResponse);
@@ -54,9 +50,7 @@ async function networkRequest(
 
   // Like the book, we parse these but don't use them yet.
   const [version, rest] = split1(statusline, " ");
-  const [status, explanation] = rest.includes(" ")
-    ? split1(rest, " ")
-    : [rest, ""];
+  const [status, explanation] = rest.includes(" ") ? split1(rest, " ") : [rest, ""];
 
   const responseHeaders = new Map<string, string>();
   for (const line of headerLines) {
@@ -84,8 +78,7 @@ const SCHEMES: SchemeStrategy[] = [
   {
     name: "data",
     defaultPort: 0,
-    match: (url) =>
-      url.startsWith("data:") ? url.slice("data:".length) : undefined,
+    match: (url) => (url.startsWith("data:") ? url.slice("data:".length) : undefined),
     request: (url) => {
       return Promise.resolve(url.path.split(",")[1] ?? "<p>No data</p>");
     },

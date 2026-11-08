@@ -61,7 +61,7 @@ export class BlockLayout {
   cursorX = 0;
   cursorY = 0;
   weight: FontWeight = "normal";
-  style: FontStyle = "roman";
+  fontStyle: FontStyle = "roman";
   size = DEFAULT_FONT_SIZE;
   align: Align = "left";
 
@@ -76,8 +76,7 @@ export class BlockLayout {
       return "inline";
     } else if (
       this.node.children.some(
-        (child) =>
-          child instanceof Element && BLOCK_ELEMENTS.includes(child.name),
+        (child) => child instanceof Element && BLOCK_ELEMENTS.includes(child.name),
       )
     ) {
       return "block";
@@ -91,9 +90,7 @@ export class BlockLayout {
   layout(): void {
     this.x = this.parent.x;
     this.width = this.parent.width;
-    this.y = this.previous
-      ? this.previous.y + this.previous.height
-      : this.parent.y;
+    this.y = this.previous ? this.previous.y + this.previous.height : this.parent.y;
 
     const mode = this.layoutMode();
     if (mode === "block") {
@@ -110,7 +107,7 @@ export class BlockLayout {
       this.cursorX = 0;
       this.cursorY = 0;
       this.weight = "normal";
-      this.style = "roman";
+      this.fontStyle = "roman";
       this.size = DEFAULT_FONT_SIZE;
       this.align = "left";
       this.line = [];
@@ -123,9 +120,7 @@ export class BlockLayout {
     }
 
     this.height =
-      mode === "block"
-        ? this.children.reduce((sum, child) => sum + child.height, 0)
-        : this.cursorY;
+      mode === "block" ? this.children.reduce((sum, child) => sum + child.height, 0) : this.cursorY;
   }
 
   recurse(tree: Token): void {
@@ -151,7 +146,7 @@ export class BlockLayout {
     if (tag === "b") {
       this.weight = "bold";
     } else if (tag === "i") {
-      this.style = "italic";
+      this.fontStyle = "italic";
       this.size = 34;
     } else if (tag === "small") {
       this.size = 10;
@@ -173,14 +168,14 @@ export class BlockLayout {
     if (tag === "b") {
       this.weight = "normal";
     } else if (tag === "i") {
-      this.style = "roman";
+      this.fontStyle = "roman";
       this.size = DEFAULT_FONT_SIZE;
     } else if (tag === "small" || tag === "big") {
       this.size = DEFAULT_FONT_SIZE;
     } else if (tag === "h1" || tag === "right") {
       this.flush();
       this.weight = "normal";
-      this.style = "roman";
+      this.fontStyle = "roman";
       this.size = DEFAULT_FONT_SIZE;
       this.align = "left";
     }
@@ -208,14 +203,13 @@ export class BlockLayout {
     }
 
     const maxDescent = Math.max(...this.line.map(({ font }) => font.descent));
-    this.cursorY =
-      baseline + LINE_HEIGHT_MULTIPLIER * maxDescent + LINE_HEIGHT_PADDING;
+    this.cursorY = baseline + LINE_HEIGHT_MULTIPLIER * maxDescent + LINE_HEIGHT_PADDING;
     this.cursorX = 0;
     this.line = [];
   }
 
   word(word: string): void {
-    const font = getFont(this.size, this.weight, this.style);
+    const font = getFont(this.size, this.weight, this.fontStyle);
     const w = font.measure(word);
     if (this.cursorX + w > this.width) {
       this.flush();
@@ -226,10 +220,14 @@ export class BlockLayout {
 
   paint(): DrawCommand[] {
     const cmds: DrawCommand[] = [];
-    if (this.node instanceof Element && this.node.name === "pre") {
+    const bgcolor =
+      this.node instanceof Element
+        ? (this.node.style["background-color"] ?? "transparent")
+        : "transparent";
+    if (bgcolor !== "transparent") {
       const x2 = this.x + this.width;
       const y2 = this.y + this.height;
-      cmds.push(new DrawRect(this.x, this.y, x2, y2, "gray"));
+      cmds.push(new DrawRect(this.x, this.y, x2, y2, bgcolor));
     }
     if (this.layoutMode() === "inline") {
       for (const { x, y, word, font } of this.displayList) {
@@ -240,10 +238,7 @@ export class BlockLayout {
   }
 }
 
-export function paintTree(
-  layoutObject: LayoutObject,
-  displayList: DrawCommand[],
-): void {
+export function paintTree(layoutObject: LayoutObject, displayList: DrawCommand[]): void {
   displayList.push(...layoutObject.paint());
   for (const child of layoutObject.children) {
     paintTree(child, displayList);

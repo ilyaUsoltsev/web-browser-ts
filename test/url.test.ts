@@ -28,9 +28,7 @@ test("parses a custom port", () => {
 
 // A one-shot local server: records the request, replies with `chunks` (written
 // separately so we exercise chunk boundaries), then closes the connection.
-async function serve(
-  chunks: Buffer[],
-): Promise<{ port: number; requestText: Promise<string> }> {
+async function serve(chunks: Buffer[]): Promise<{ port: number; requestText: Promise<string> }> {
   let gotRequest!: (s: string) => void;
   const requestText = new Promise<string>((r) => (gotRequest = r));
   const server = net.createServer((sock) => {
@@ -71,11 +69,7 @@ test("request() decodes UTF-8 split across chunk boundaries", async () => {
 
 test("show() prints text with tags removed", (t) => {
   const written: string[] = [];
-  t.mock.method(
-    process.stdout,
-    "write",
-    (s: string) => (written.push(s), true),
-  );
+  t.mock.method(process.stdout, "write", (s: string) => (written.push(s), true));
   show("<html><body><p>Hello, <b>world</b>!</p></body></html>");
   t.mock.restoreAll();
   assert.equal(written.join(""), "Hello, world!");

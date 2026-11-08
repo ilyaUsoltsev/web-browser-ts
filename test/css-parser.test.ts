@@ -3,17 +3,19 @@ import { test } from "node:test";
 import { CSSParser } from "../src/css-parser.ts";
 
 test("CSS body parses declarations with whitespace and repeated properties", () => {
-  assert.deepEqual(
-    new CSSParser("  color: red; font-size: 16px; color: blue;  ").body(),
-    { color: "blue", "font-size": "16px" },
-  );
+  assert.deepEqual(new CSSParser("  color: red; font-size: 16px; color: blue;  ").body(), {
+    color: "blue",
+    "font-size": "16px",
+  });
   assert.deepEqual(new CSSParser("color: red").body(), { color: "red" });
   assert.deepEqual(new CSSParser(" \n ").body(), {});
 });
 
 test("CSS body skips malformed and unsupported declarations", () => {
   assert.deepEqual(
-    new CSSParser("broken; : red; color: ; width: calc(100px); color: blue; font-size: 16px; unfinished").body(),
+    new CSSParser(
+      "broken; : red; color: ; width: calc(100px); color: blue; font-size: 16px; unfinished",
+    ).body(),
     { color: "blue", "font-size": "16px" },
   );
   assert.deepEqual(new CSSParser("color: red; color: rgb(1,2,3)").body(), { color: "red" });

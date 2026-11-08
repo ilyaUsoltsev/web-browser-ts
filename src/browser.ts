@@ -5,6 +5,7 @@ import type { Element } from "./tokens.ts";
 import { WIDTH, HSTEP, VSTEP, HEIGHT, SCROLL_STEP } from "./constants.ts";
 import { DocumentLayout, paintTree } from "./layout.ts";
 import type { DrawCommand } from "./types.ts";
+import { style } from "./css-parser.ts";
 
 export class Browser {
   window: Window;
@@ -57,6 +58,7 @@ export class Browser {
         throw new Error("Failed to parse HTML");
       }
       // parser.printTree(root);
+      style(root);
       this.document = new DocumentLayout(root);
       this.layout();
     }

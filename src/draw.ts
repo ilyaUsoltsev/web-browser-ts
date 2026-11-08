@@ -43,11 +43,6 @@ export class DrawRect implements DrawCommand {
 
   execute(scroll: number, canvas: CanvasRenderingContext2D): void {
     canvas.fillStyle = this.color;
-    canvas.fillRect(
-      this.left,
-      this.top - scroll,
-      this.right - this.left,
-      this.bottom - this.top,
-    );
+    canvas.fillRect(this.left, this.top - scroll, this.right - this.left, this.bottom - this.top);
   }
 }

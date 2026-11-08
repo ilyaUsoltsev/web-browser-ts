@@ -15,9 +15,7 @@ export class Socket {
   }
 
   private constructor(secure: boolean, host: string, port: number) {
-    this.socket = secure
-      ? tls.connect({ host, port, servername: host })
-      : new net.Socket();
+    this.socket = secure ? tls.connect({ host, port, servername: host }) : new net.Socket();
     if (!secure) {
       this.socket.connect({ host, port });
     }

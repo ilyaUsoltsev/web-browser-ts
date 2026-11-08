@@ -29,12 +29,12 @@ npm run typecheck                          # type-check with tsc
 
 ## Layout
 
-| File             | Book equivalent                           |
-| ---------------- | ----------------------------------------- |
-| `src/url.ts`     | `URL` class, `show()`, `load()` (ch. 1)   |
-| `src/browser.ts` | `lex()`, `layout()`, `Browser` (ch. 2)    |
-| `src/main.ts`    | the `if __name__ == "__main__":` block    |
-| `test/`          | tests for each module                     |
+| File             | Book equivalent                         |
+| ---------------- | --------------------------------------- |
+| `src/url.ts`     | `URL` class, `show()`, `load()` (ch. 1) |
+| `src/browser.ts` | `lex()`, `layout()`, `Browser` (ch. 2)  |
+| `src/main.ts`    | the `if __name__ == "__main__":` block  |
+| `test/`          | tests for each module                   |
 
 ## Where TypeScript/Node differs from the book
 

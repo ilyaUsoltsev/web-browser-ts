@@ -4,11 +4,7 @@ export class Text {
   text: string;
   children: Token[] = [];
   parent: Token | null = null;
-  constructor(
-    text: string,
-    parent: Token | null = null,
-    children: Token[] = [],
-  ) {
+  constructor(text: string, parent: Token | null = null, children: Token[] = []) {
     this.text = text;
     this.children = children;
     this.parent = parent;
@@ -28,6 +24,7 @@ export class Element {
   attributes: Record<string, null | string> = {};
   children: Token[] = [];
   parent: Token | null = null;
+  style: Record<string, string> = {};
   constructor(
     name: string,
     attributes: Record<string, null | string> = {},

@@ -1,3 +1,14 @@
+import { Element, type Token } from "./tokens.ts";
+
+export function style(node: Token): void {
+  if (node instanceof Element) {
+    node.style = new CSSParser(node.attributes["style"] ?? "").body();
+  }
+  for (const child of node.children) {
+    style(child);
+  }
+}
+
 export class CSSParser {
   constructor(
     private text: string,

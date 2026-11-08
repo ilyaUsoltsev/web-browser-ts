@@ -4,6 +4,7 @@ import { BlockLayout, DocumentLayout, paintTree } from "../src/layout.ts";
 import { DrawRect, DrawText } from "../src/draw.ts";
 import { getFont } from "../src/fonts.ts";
 import { Text, Element } from "../src/tokens.ts";
+import { style } from "../src/css-parser.ts";
 import {
   DEFAULT_FONT_SIZE,
   HSTEP,
@@ -13,10 +14,10 @@ import {
 } from "../src/constants.ts";
 import type { DrawCommand } from "../src/types.ts";
 
-const el = (name: string, ...children: (Text | Element)[]) =>
-  new Element(name, {}, null, children);
+const el = (name: string, ...children: (Text | Element)[]) => new Element(name, {}, null, children);
 
 function render(root: Element, width = WIDTH) {
+  style(root);
   const document = new DocumentLayout(root);
   document.layout(width);
   const displayList: DrawCommand[] = [];
@@ -28,10 +29,7 @@ const texts = (displayList: DrawCommand[]) =>
   displayList.filter((cmd): cmd is DrawText => cmd instanceof DrawText);
 
 test("getFont caches fonts", () => {
-  assert.equal(
-    getFont(14, "bold", "italic"),
-    getFont(14, "bold", "italic"),
-  );
+  assert.equal(getFont(14, "bold", "italic"), getFont(14, "bold", "italic"));
   assert.notEqual(getFont(14, "bold", "roman"), getFont(14, "normal", "roman"));
 });
 
@@ -40,8 +38,14 @@ test("head remains in HTML but contributes no layout or visible text", () => {
   const root = el("html", head, el("body", new Text("Hello")));
   const { document, displayList } = render(root);
   assert.equal(root.children[0], head);
-  assert.deepEqual(document.children[0]!.children.map((child) => child.node), [root.children[1]]);
-  assert.deepEqual(texts(displayList).map((cmd) => cmd.text), ["Hello"]);
+  assert.deepEqual(
+    document.children[0]!.children.map((child) => child.node),
+    [root.children[1]],
+  );
+  assert.deepEqual(
+    texts(displayList).map((cmd) => cmd.text),
+    ["Hello"],
+  );
   assert.equal(document.height, render(el("body", new Text("Hello"))).document.height);
   assert.deepEqual(texts(render(el("html", head)).displayList), []);
 });
@@ -60,9 +64,7 @@ test("places words left to right on one line", () => {
 });
 
 test("layoutMode is block when a child is a block element", () => {
-  const document = new DocumentLayout(
-    el("body", el("p", new Text("a")), el("p", new Text("b"))),
-  );
+  const document = new DocumentLayout(el("body", el("p", new Text("a")), el("p", new Text("b"))));
   document.layout();
   const body = document.children[0]!;
   assert.equal(body.layoutMode(), "block");
@@ -87,10 +89,33 @@ test("pre gets a gray background", () => {
   assert.equal((displayList[0] as DrawRect).color, "gray");
 });
 
+test("styles are computed for the root and inline descendants before layout", () => {
+  const span = new Element("span", { style: "background-color: blue" }, null, [new Text("hello")]);
+  const root = new Element("body", { style: "background-color: red" }, null, [span]);
+  const { document, displayList } = render(root);
+  assert.equal(span.style["background-color"], "blue");
+  assert.ok(displayList[0] instanceof DrawRect);
+  const rect = displayList[0] as DrawRect;
+  assert.equal(rect.color, "red");
+  assert.equal(rect.bottom, document.y + document.height);
+  assert.ok(displayList[1] instanceof DrawText);
+});
+
+test("explicit pre backgrounds override gray, including transparent", () => {
+  for (const color of ["red", "transparent"]) {
+    const pre = new Element("pre", { style: `background-color: ${color}` }, null, [
+      new Text("code"),
+    ]);
+    const rects = render(el("body", pre)).displayList.filter((cmd) => cmd instanceof DrawRect);
+    assert.deepEqual(
+      rects.map((rect) => rect.color),
+      color === "transparent" ? [] : [color],
+    );
+  }
+});
+
 test("wraps at the window width", () => {
-  const { document, displayList } = render(
-    el("body", new Text("word ".repeat(200))),
-  );
+  const { document, displayList } = render(el("body", new Text("word ".repeat(200))));
   const ys = new Set(texts(displayList).map((cmd) => cmd.top));
   assert.ok(ys.size > 1);
   for (const cmd of texts(displayList)) assert.ok(cmd.left < WIDTH - HSTEP);

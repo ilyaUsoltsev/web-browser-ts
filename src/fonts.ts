@@ -28,11 +28,7 @@ export class Font {
 
 const FONTS = new Map<string, Font>();
 
-export function getFont(
-  size: number,
-  weight: FontWeight,
-  style: FontStyle,
-): Font {
+export function getFont(size: number, weight: FontWeight, style: FontStyle): Font {
   const key = `${size}|${weight}|${style}`;
   let font = FONTS.get(key);
   if (!font) {
