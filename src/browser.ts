@@ -3,17 +3,17 @@ import type { URL } from "./url.ts";
 import { Parser } from "./parser.ts";
 import type { Element } from "./tokens.ts";
 import { WIDTH, HSTEP, VSTEP, HEIGHT, SCROLL_STEP } from "./constants.ts";
-import { LayoutClass } from "./layout.ts";
-import type { Layout } from "./types.ts";
+import { DocumentLayout, paintTree } from "./layout.ts";
+import type { DrawCommand } from "./types.ts";
 
 export class Browser {
   window: Window;
-  layout: Layout = { displayList: [], totalHeight: 0 };
-  root: Element | undefined;
+  displayList: DrawCommand[] = [];
+  totalHeight = 0;
+  document: DocumentLayout | undefined;
   scroll = 0;
   scrollbarHeight = 0;
   scrollbarY = 0;
-  layoutClass: LayoutClass = new LayoutClass();
 
   constructor() {
     this.window = new Window(WIDTH, HEIGHT, {
@@ -41,9 +41,7 @@ export class Browser {
     this.window.on("resize", (e) => {
       this.window.height = e.height;
       this.window.width = e.width;
-      if (this.root) {
-        this.layout = this.layoutClass.calculate(this.root, this.window.width);
-      }
+      this.layout();
       this.draw();
     });
   }
@@ -54,40 +52,48 @@ export class Browser {
       // this.layout = layout(body, this.window.width);
     } else {
       const parser = new Parser(body);
-      this.root = parser.parse();
-      console.log(this.root, "root");
-      if (!this.root) {
+      const root: Element | undefined = parser.parse();
+      if (!root) {
         throw new Error("Failed to parse HTML");
       }
-      parser.printTree(this.root);
-      this.layout = this.layoutClass.calculate(this.root, this.window.width);
+      parser.printTree(root);
+      this.document = new DocumentLayout(root);
+      this.layout();
     }
     this.draw();
+  }
+
+  layout(): void {
+    if (!this.document) {
+      return;
+    }
+    this.document.layout(this.window.width);
+    this.displayList = [];
+    paintTree(this.document, this.displayList);
+    this.totalHeight = this.document.height + 2 * VSTEP;
   }
 
   draw(): void {
     const ctx = this.window.ctx;
     ctx.fillStyle = "white";
     ctx.fillRect(0, 0, this.window.width, this.window.height);
-    ctx.fillStyle = "black";
 
-    for (const { x, y, word, font } of this.layout.displayList) {
-      if (y > this.scroll + this.window.height) {
+    for (const cmd of this.displayList) {
+      if (cmd.top > this.scroll + this.window.height) {
         continue;
       }
-      if (y + VSTEP < this.scroll) {
+      if (cmd.bottom < this.scroll) {
         continue;
       }
-      ctx.font = font;
-      ctx.fillText(word, x, y - this.scroll);
+      cmd.execute(this.scroll, ctx);
     }
 
     // Add scrollbar
     ctx.fillStyle = "gray";
     this.scrollbarHeight =
-      (this.window.height * this.window.height) / this.layout.totalHeight;
+      (this.window.height * this.window.height) / this.totalHeight;
     this.scrollbarY =
-      (this.scroll * this.window.height) / this.layout.totalHeight;
+      (this.scroll * this.window.height) / this.totalHeight;
 
     if (this.scrollbarHeight >= this.window.height) {
       return;
