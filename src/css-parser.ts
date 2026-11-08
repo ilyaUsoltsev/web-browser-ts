@@ -1,4 +1,5 @@
 import { Element, type Token } from "./tokens.ts";
+import { TagSelector, DescendantSelector, type Selector } from "./selectors.ts";
 
 export function style(node: Token): void {
   if (node instanceof Element) {
@@ -60,21 +61,58 @@ export class CSSParser {
     return null;
   }
 
-  body(): Record<string, string> {
-    const pairs: Record<string, string> = {};
+  selector() {
+    let out: Selector = new TagSelector(this.word());
+    this.whitespace();
+    while (this.position < this.text.length && this.text[this.position] !== "{") {
+      const tag = this.word();
+      const descendant = new TagSelector(tag);
+      out = new DescendantSelector(out, descendant);
+      this.whitespace();
+    }
+    return out;
+  }
+
+  parse() {
+    const rules: { selector: Selector; body: Record<string, string> }[] = [];
     this.whitespace();
     while (this.position < this.text.length) {
       try {
+        const selector = this.selector();
+        this.whitespace();
+        this.literal("{");
+        this.whitespace();
+        const body = this.body();
+        this.literal("}");
+        rules.push({ selector, body });
+        this.whitespace();
+      } catch {
+        // An invalid selector or rule header invalidates the entire rule.
+        if (this.ignoreUntil(["}"]) !== "}") {
+          break;
+        }
+        this.literal("}");
+        this.whitespace();
+      }
+    }
+    return rules;
+  }
+
+  body(): Record<string, string> {
+    const pairs: Record<string, string> = {};
+    this.whitespace();
+    while (this.position < this.text.length && this.text[this.position] !== "}") {
+      try {
         const { property, value } = this.pair();
         this.whitespace();
-        if (this.position < this.text.length) {
+        if (this.position < this.text.length && this.text[this.position] !== "}") {
           this.literal(";");
         }
         pairs[property] = value;
         this.whitespace();
       } catch {
         // Unsupported or malformed declarations are skipped independently.
-        if (this.ignoreUntil([";"]) !== ";") {
+        if (this.ignoreUntil([";", "}"]) !== ";") {
           break;
         }
         this.literal(";");

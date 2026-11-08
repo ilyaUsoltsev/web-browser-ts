@@ -1,6 +1,25 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { CSSParser } from "../src/css-parser.ts";
+import { Element } from "../src/tokens.ts";
+
+test("CSS rule parsing skips invalid selectors and keeps later rules", () => {
+  const rules = new CSSParser("p { color: red; } .unsupported { color: blue; } div { color: green }  ").parse();
+  assert.deepEqual(rules.map((rule) => rule.body), [{ color: "red" }, { color: "green" }]);
+  assert.ok(rules[0]!.selector.matches(new Element("p")));
+  assert.ok(rules[1]!.selector.matches(new Element("div")));
+});
+
+test("CSS declaration recovery leaves the closing brace for the rule parser", () => {
+  const rules = new CSSParser("p { color: red; broken } div { color: blue; }").parse();
+  assert.deepEqual(rules.map((rule) => rule.body), [{ color: "red" }, { color: "blue" }]);
+});
+
+test("CSS rule recovery stops at EOF and handles empty stylesheets", () => {
+  assert.deepEqual(new CSSParser("  ").parse(), []);
+  assert.deepEqual(new CSSParser(".unsupported { color: red;").parse(), []);
+  assert.deepEqual(new CSSParser("p { color: red;").parse(), []);
+});
 
 test("CSS body parses declarations with whitespace and repeated properties", () => {
   assert.deepEqual(new CSSParser("  color: red; font-size: 16px; color: blue;  ").body(), {
