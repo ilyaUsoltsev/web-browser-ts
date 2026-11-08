@@ -99,6 +99,9 @@ export class BlockLayout {
     if (mode === "block") {
       let previous: BlockLayout | null = null;
       for (const child of this.node.children) {
+        if (child instanceof Element && child.name === "head") {
+          continue;
+        }
         const next: BlockLayout = new BlockLayout(child, this, previous);
         this.children.push(next);
         previous = next;
@@ -126,6 +129,9 @@ export class BlockLayout {
   }
 
   recurse(tree: Token): void {
+    if (tree instanceof Element && tree.name === "head") {
+      return;
+    }
     if (tree instanceof Text) {
       for (const word of tree.text.split(/\s+/)) {
         if (word) {

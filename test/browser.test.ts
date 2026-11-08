@@ -35,6 +35,17 @@ test("getFont caches fonts", () => {
   assert.notEqual(getFont(14, "bold", "roman"), getFont(14, "normal", "roman"));
 });
 
+test("head remains in HTML but contributes no layout or visible text", () => {
+  const head = el("head", el("title", new Text("Document")), el("style", new Text("hidden")));
+  const root = el("html", head, el("body", new Text("Hello")));
+  const { document, displayList } = render(root);
+  assert.equal(root.children[0], head);
+  assert.deepEqual(document.children[0]!.children.map((child) => child.node), [root.children[1]]);
+  assert.deepEqual(texts(displayList).map((cmd) => cmd.text), ["Hello"]);
+  assert.equal(document.height, render(el("body", new Text("Hello"))).document.height);
+  assert.deepEqual(texts(render(el("html", head)).displayList), []);
+});
+
 test("places words left to right on one line", () => {
   const { displayList } = render(el("body", new Text("ab cd")));
   const font = getFont(DEFAULT_FONT_SIZE, "normal", "roman");
