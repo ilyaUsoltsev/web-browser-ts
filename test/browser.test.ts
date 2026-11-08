@@ -17,7 +17,7 @@ import type { DrawCommand } from "../src/types.ts";
 const el = (name: string, ...children: (Text | Element)[]) => new Element(name, {}, null, children);
 
 function render(root: Element, width = WIDTH) {
-  style(root);
+  style(root, []);
   const document = new DocumentLayout(root);
   document.layout(width);
   const displayList: DrawCommand[] = [];

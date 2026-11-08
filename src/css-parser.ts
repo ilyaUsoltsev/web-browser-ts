@@ -1,12 +1,22 @@
 import { Element, type Token } from "./tokens.ts";
 import { TagSelector, DescendantSelector, type Selector } from "./selectors.ts";
 
-export function style(node: Token): void {
+export function style(
+  node: Token,
+  rules: { selector: Selector; body: Record<string, string> }[],
+): void {
   if (node instanceof Element) {
-    node.style = new CSSParser(node.attributes["style"] ?? "").body();
+    for (const rule of rules) {
+      if (!rule.selector.matches(node)) {
+        continue;
+      } else {
+        Object.assign(node.style, rule.body);
+      }
+    }
+    node.style = Object.assign(node.style, new CSSParser(node.attributes["style"] ?? "").body());
   }
   for (const child of node.children) {
-    style(child);
+    style(child, rules);
   }
 }
 

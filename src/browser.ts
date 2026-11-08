@@ -1,11 +1,16 @@
 import { Window } from "skia-canvas";
 import type { URL } from "./url.ts";
+import { CSSParser } from "./css-parser.ts";
 import { Parser } from "./parser.ts";
 import type { Element } from "./tokens.ts";
 import { WIDTH, HSTEP, VSTEP, HEIGHT, SCROLL_STEP } from "./constants.ts";
 import { DocumentLayout, paintTree } from "./layout.ts";
 import type { DrawCommand } from "./types.ts";
 import { style } from "./css-parser.ts";
+import { URL as NodeURL } from "node:url";
+import fs from "fs";
+
+const browserCssPath = new NodeURL("../browser.css", import.meta.url);
 
 export class Browser {
   window: Window;
@@ -57,8 +62,9 @@ export class Browser {
       if (!root) {
         throw new Error("Failed to parse HTML");
       }
-      // parser.printTree(root);
-      style(root);
+      const cssFile = fs.readFileSync(browserCssPath, "utf-8");
+
+      style(root, new CSSParser(cssFile).parse());
       this.document = new DocumentLayout(root);
       this.layout();
     }
