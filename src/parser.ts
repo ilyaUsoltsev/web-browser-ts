@@ -86,6 +86,7 @@ export class Parser {
   }
 
   addTag(name: string): void {
+    this.currentElement = "";
     if (name.startsWith("!")) {
       this.currentElement = "";
       return;
@@ -137,27 +138,19 @@ export class Parser {
   }
 
   private checkFor(substring: string): boolean {
-    return (
-      this.body.slice(this.counter, this.counter + substring.length) ===
-      substring
-    );
+    return this.body.slice(this.counter, this.counter + substring.length) === substring;
   }
 
   private getAttributes(text: string) {
-    const parts = text.split(/\s+/);
+    const tag = text.match(/^[^\s/]+/)?.[0] ?? "";
     const attributes: Element["attributes"] = {};
-    for (let i = 1; i < parts.length; i++) {
-      const keyValue = parts[i]?.split("=");
-      const key = keyValue?.[0];
-      const value = keyValue?.[1];
-      if (key && !value) {
-        attributes[key] = null;
-      }
-      if (key && value) {
-        attributes[key] = value.replace(/['"]/g, "");
-      }
+    // Match whole quoted values before considering unquoted values.
+    const pattern = /([^\s=/>]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+)))?/g;
+    for (const match of text.slice(tag.length).matchAll(pattern)) {
+      const key = match[1]!;
+      attributes[key] = match[2] ?? match[3] ?? match[4] ?? null;
     }
-    return { tag: parts[0] ?? "", attributes };
+    return { tag, attributes };
   }
 
   private missingTags(tag: string = ""): void {
@@ -168,12 +161,7 @@ export class Parser {
       );
       if (openTags.length === 0 && tag !== "html") {
         this.addTag("html");
-      } else if (
-        openTags.length === 1 &&
-        openTags[0] === "html" &&
-        !hasHead &&
-        tag !== "head"
-      ) {
+      } else if (openTags.length === 1 && openTags[0] === "html" && !hasHead && tag !== "head") {
         // Always create a head first, even if it stays empty
         this.addTag("head");
       } else if (

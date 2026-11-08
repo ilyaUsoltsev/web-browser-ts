@@ -90,10 +90,8 @@ export class Browser {
 
     // Add scrollbar
     ctx.fillStyle = "gray";
-    this.scrollbarHeight =
-      (this.window.height * this.window.height) / this.totalHeight;
-    this.scrollbarY =
-      (this.scroll * this.window.height) / this.totalHeight;
+    this.scrollbarHeight = (this.window.height * this.window.height) / this.totalHeight;
+    this.scrollbarY = (this.scroll * this.window.height) / this.totalHeight;
 
     if (this.scrollbarHeight >= this.window.height) {
       return;

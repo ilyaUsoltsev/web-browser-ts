@@ -42,6 +42,19 @@ test("Parser builds a nested HTML tree with implicit containers", () => {
   ]);
 });
 
+test("Parser clears closing root tags before processing trailing input", () => {
+  for (const suffix of ["", "\n", "\n<p>after</p>"]) {
+    const root = parse(`<html><head></head><body>hello</body></html>${suffix}`);
+    const text: string[] = [];
+    function collect(node: Token): void {
+      if (node instanceof Text) text.push(node.text);
+      else node.children.forEach(collect);
+    }
+    collect(root);
+    assert.deepEqual(text, suffix.includes("after") ? ["hello", "after"] : ["hello"]);
+  }
+});
+
 test("Parser processes empty HTML with an implicit document", () => {
   assert.deepEqual(tree(parse("")), [
     "html", {}, [["head", {}, []], ["body", {}, []]],
@@ -71,6 +84,26 @@ test("Parser assigns parents to explicit elements and void elements", () => {
   assert.deepEqual(tree(body), [
     "body", {}, [["p", { id: "intro" }, ["Hello", ["br", {}, []], "world"]]],
   ]);
+});
+
+test("Parser preserves quoted attribute values and ignores the closing slash", () => {
+  const root = parse('<meta name="viewport" content="width=device-width, initial-scale=1.0" />');
+  const head = root.children[0] as Element;
+  const meta = head.children[0] as Element;
+  assert.deepEqual(meta.attributes, {
+    name: "viewport",
+    content: "width=device-width, initial-scale=1.0",
+  });
+});
+
+test("Parser handles boolean, empty, single-quoted, and unquoted attributes", () => {
+  const body = bodyOf(`<input disabled value="" title = 'say "hello"' data-token=a=b />`);
+  assert.deepEqual((body.children[0] as Element).attributes, {
+    disabled: null,
+    value: "",
+    title: 'say "hello"',
+    "data-token": "a=b",
+  });
 });
 
 test("Nodes have concise string and debug representations", () => {
