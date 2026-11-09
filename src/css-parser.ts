@@ -2,6 +2,8 @@ import { Element, type Token } from "./tokens.ts";
 import { TagSelector, DescendantSelector, type Selector } from "./selectors.ts";
 import type { Rule } from "./types.ts";
 import { INHERITED_PROPERTIES } from "./constants.ts";
+import { URL as NodeURL } from "node:url";
+import fs from "node:fs";
 
 export function style(node: Token, rules: Rule[]): void {
   if (node instanceof Element) {
@@ -151,3 +153,10 @@ export class CSSParser {
     return pairs;
   }
 }
+
+const browserCssPath = new NodeURL("../browser.css", import.meta.url);
+
+/** Rules from the browser's built-in stylesheet (browser.css). */
+export const DEFAULT_STYLE_SHEET: readonly Rule[] = new CSSParser(
+  fs.readFileSync(browserCssPath, "utf-8"),
+).parse();

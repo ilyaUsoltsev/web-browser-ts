@@ -1,18 +1,14 @@
 import { Window } from "skia-canvas";
 import type { URL } from "./url.ts";
 import { treeToList } from "./utils.ts";
-import { CSSParser } from "./css-parser.ts";
+import { CSSParser, DEFAULT_STYLE_SHEET, style } from "./css-parser.ts";
 import { Parser } from "./parser.ts";
 import { Element } from "./tokens.ts";
 import { WIDTH, HSTEP, VSTEP, HEIGHT, SCROLL_STEP } from "./constants.ts";
 import { DocumentLayout, paintTree } from "./layout.ts";
 import type { DrawCommand } from "./types.ts";
-import { style } from "./css-parser.ts";
-import { URL as NodeURL } from "node:url";
 import fs from "fs";
 import { cascadePriority } from "./utils.ts";
-
-const browserCssPath = new NodeURL("../browser.css", import.meta.url);
 
 export class Browser {
   window: Window;
@@ -76,9 +72,7 @@ export class Browser {
           : [],
       ) as string[];
 
-      // get default browser CSS
-      const cssFile = fs.readFileSync(browserCssPath, "utf-8");
-      const rules = new CSSParser(cssFile).parse();
+      const rules = [...DEFAULT_STYLE_SHEET];
 
       for (const link of links) {
         const linkUrl = url.resolve(link);

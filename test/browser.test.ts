@@ -4,7 +4,8 @@ import { BlockLayout, DocumentLayout, paintTree } from "../src/layout.ts";
 import { DrawRect, DrawText } from "../src/draw.ts";
 import { getFont } from "../src/fonts.ts";
 import { Text, Element } from "../src/tokens.ts";
-import { style } from "../src/css-parser.ts";
+import { DEFAULT_STYLE_SHEET, style } from "../src/css-parser.ts";
+import { cascadePriority } from "../src/utils.ts";
 import {
   DEFAULT_FONT_SIZE,
   HSTEP,
@@ -17,7 +18,10 @@ import type { DrawCommand } from "../src/types.ts";
 const el = (name: string, ...children: (Text | Element)[]) => new Element(name, {}, null, children);
 
 function render(root: Element, width = WIDTH) {
-  style(root, []);
+  style(
+    root,
+    [...DEFAULT_STYLE_SHEET].sort((a, b) => cascadePriority(a) - cascadePriority(b)),
+  );
   const document = new DocumentLayout(root);
   document.layout(width);
   const displayList: DrawCommand[] = [];
@@ -83,10 +87,10 @@ test("block children stack vertically", () => {
   assert.ok(b!.top > a!.top);
 });
 
-test("pre gets a gray background", () => {
+test("pre gets the default stylesheet's background", () => {
   const { displayList } = render(el("body", el("pre", new Text("code"))));
   assert.ok(displayList[0] instanceof DrawRect);
-  assert.equal((displayList[0] as DrawRect).color, "gray");
+  assert.equal((displayList[0] as DrawRect).color, "lightgray");
 });
 
 test("styles are computed for the root and inline descendants before layout", () => {
@@ -101,7 +105,7 @@ test("styles are computed for the root and inline descendants before layout", ()
   assert.ok(displayList[1] instanceof DrawText);
 });
 
-test("explicit pre backgrounds override gray, including transparent", () => {
+test("explicit pre backgrounds override the default, including transparent", () => {
   for (const color of ["red", "transparent"]) {
     const pre = new Element("pre", { style: `background-color: ${color}` }, null, [
       new Text("code"),
