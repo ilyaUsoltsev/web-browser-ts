@@ -19,6 +19,7 @@ export class Tab {
   scrollbarHeight = 0;
   scrollbarY = 0;
   url!: URL;
+  history: URL[] = [];
 
   constructor(
     public width = WIDTH,
@@ -56,7 +57,17 @@ export class Tab {
     }
   }
 
+  async goBack(): Promise<void> {
+    if (this.history.length <= 1) {
+      return;
+    }
+    this.history.pop();
+    const url = this.history.pop()!;
+    await this.load(url);
+  }
+
   async load(url: URL): Promise<void> {
+    this.history.push(url);
     this.url = url;
     this.scroll = 0;
     const body = await url.request();

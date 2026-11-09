@@ -1,26 +1,53 @@
 import type { Browser } from "./browser.ts";
 import { WIDTH } from "./constants.ts";
 import { DrawLine, DrawOutline, DrawRect, DrawText } from "./draw.ts";
-import { getFont } from "./fonts.ts";
+import { Font, getFont } from "./fonts.ts";
 import { Rect } from "./rect.ts";
 import type { DrawCommand } from "./types.ts";
 import { parseUrl } from "./url.ts";
 
 export class Chrome {
-  font = getFont(20, "normal", "normal");
-  fontHeight = this.font.linespace;
-  padding = 5;
-  tabbarTop = 0;
-  tabbarBottom = this.fontHeight + 2 * this.padding;
-  bottom = this.tabbarBottom;
-  newtabRect = new Rect(
-    this.padding,
-    this.padding,
-    this.padding + this.font.measure("+") + 2 * this.padding,
-    this.padding + this.fontHeight,
-  );
+  font: Font;
+  fontHeight: number;
+  padding: number;
+  tabbarTop: number;
+  tabbarBottom: number;
+  newtabRect: Rect;
+  backRect: Rect;
+  addressRect: Rect;
+  urlbarTop: number;
+  urlbarBottom: number;
+  bottom: number;
 
-  constructor(private browser: Browser) {}
+  constructor(private browser: Browser) {
+    this.font = getFont(20, "normal", "normal");
+    this.fontHeight = this.font.linespace;
+    this.padding = 5;
+    this.tabbarTop = 0;
+    this.tabbarBottom = this.fontHeight + 2 * this.padding;
+    this.newtabRect = new Rect(
+      this.padding,
+      this.padding,
+      this.padding + this.font.measure("+") + 2 * this.padding,
+      this.padding + this.fontHeight,
+    );
+    this.urlbarTop = this.tabbarBottom;
+    this.urlbarBottom = this.urlbarTop + this.fontHeight + 2 * this.padding;
+    this.bottom = this.urlbarBottom;
+    const backWidth = this.font.measure("<") + 2 * this.padding;
+    this.backRect = new Rect(
+      this.padding,
+      this.urlbarTop + this.padding,
+      this.padding + backWidth,
+      this.urlbarBottom - this.padding,
+    );
+    this.addressRect = new Rect(
+      this.backRect.right + this.padding,
+      this.urlbarTop + this.padding,
+      WIDTH - this.padding,
+      this.urlbarBottom - this.padding,
+    );
+  }
 
   tabRect(i: number): Rect {
     const start = this.newtabRect.right + this.padding;
@@ -61,6 +88,21 @@ export class Chrome {
           new DrawLine(bounds.left + 1, bounds.bottom, bounds.right - 1, bounds.bottom, "white", 1),
         );
       }
+      cmds.push(new DrawOutline(this.backRect, "black", 1));
+      cmds.push(
+        new DrawText(this.backRect.left + this.padding, this.backRect.top, "<", this.font, "black"),
+      );
+      cmds.push(new DrawOutline(this.addressRect, "black", 1));
+      const url = this.browser.activeTab?.url.getUrlString() ?? "";
+      cmds.push(
+        new DrawText(
+          this.addressRect.left + this.padding,
+          this.addressRect.top,
+          url,
+          this.font,
+          "black",
+        ),
+      );
     });
     return cmds;
   }
@@ -68,6 +110,9 @@ export class Chrome {
   async click(x: number, y: number): Promise<void> {
     if (this.newtabRect.containsPoint(x, y)) {
       await this.browser.newTab(parseUrl("https://browser.engineering/"));
+      return;
+    } else if (this.backRect.containsPoint(x, y)) {
+      await this.browser.activeTab?.goBack();
       return;
     }
     const index = this.browser.tabs.findIndex((_, i) => this.tabRect(i).containsPoint(x, y));

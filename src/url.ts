@@ -168,6 +168,16 @@ export class URL {
         url,
     );
   }
+
+  getUrlString(): string {
+    return (
+      this.scheme +
+      "://" +
+      this.host +
+      (this.port !== this.strategy.defaultPort ? ":" + this.port : "") +
+      this.path
+    );
+  }
 }
 
 // Factory: the only place that knows how to go from a raw string to a
