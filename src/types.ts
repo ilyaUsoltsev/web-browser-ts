@@ -5,7 +5,10 @@ export type FontWeight = "normal" | "bold";
 export type FontStyle = "normal" | "italic";
 export type Align = "left" | "center" | "right";
 
+import type { Rect } from "./rect.ts";
+
 export interface DrawCommand {
+  rect: Rect;
   top: number;
   bottom: number;
   execute(scroll: number, canvas: CanvasRenderingContext2D): void;

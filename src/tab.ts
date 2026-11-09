@@ -9,7 +9,6 @@ import { WIDTH, HSTEP, VSTEP, HEIGHT, SCROLL_STEP } from "./constants.ts";
 import { DocumentLayout, paintTree } from "./layout.ts";
 import { Text } from "./tokens.ts";
 import type { DrawCommand } from "./types.ts";
-import fs from "fs";
 import { cascadePriority } from "./utils.ts";
 
 export class Tab {
@@ -27,7 +26,9 @@ export class Tab {
   ) {}
 
   async click(x: number, y: number): Promise<void> {
-    if (!this.document) return;
+    if (!this.document) {
+      return;
+    }
     // Handle click events here
     y += this.scroll;
     const objects = treeToList<LayoutObject>(this.document, []).filter(
@@ -83,9 +84,12 @@ export class Tab {
 
       for (const link of links) {
         const linkUrl = url.resolve(link);
-        const cssFile = fs.readFileSync(linkUrl.path, "utf-8");
-        const linkRules = new CSSParser(cssFile).parse();
-        rules.push(...linkRules);
+        try {
+          const cssFile = await linkUrl.request();
+          rules.push(...new CSSParser(cssFile).parse());
+        } catch {
+          // An unavailable stylesheet should not prevent the page from loading.
+        }
       }
 
       style(
@@ -109,19 +113,25 @@ export class Tab {
     this.scroll = Math.min(this.scroll, Math.max(0, this.totalHeight - this.height));
   }
 
-  draw(ctx: CanvasRenderingContext2D): void {
+  draw(ctx: CanvasRenderingContext2D, offset = 0): void {
+    if (this.height <= 0) {
+      return;
+    }
     for (const cmd of this.displayList) {
-      if (cmd.top > this.scroll + this.height) {
+      if (cmd.rect.top > this.scroll + this.height) {
         continue;
       }
-      if (cmd.bottom < this.scroll) {
+      if (cmd.rect.bottom < this.scroll) {
         continue;
       }
-      cmd.execute(this.scroll, ctx);
+      cmd.execute(this.scroll - offset, ctx);
     }
 
     // Add scrollbar
     ctx.fillStyle = "gray";
+    if (this.totalHeight <= this.height) {
+      return;
+    }
     this.scrollbarHeight = (this.height * this.height) / this.totalHeight;
     this.scrollbarY = (this.scroll * this.height) / this.totalHeight;
 
@@ -129,7 +139,7 @@ export class Tab {
       return;
     }
 
-    ctx.fillRect(this.width - HSTEP / 2, this.scrollbarY, this.width, this.scrollbarHeight);
+    ctx.fillRect(this.width - HSTEP / 2, this.scrollbarY + offset, HSTEP / 2, this.scrollbarHeight);
   }
 
   scrolldown(step = SCROLL_STEP): void {

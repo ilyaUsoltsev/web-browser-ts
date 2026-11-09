@@ -17,7 +17,9 @@ import type { DrawCommand } from "../src/types.ts";
 
 const el = (name: string, ...children: (Text | Element)[]) => {
   const element = new Element(name, {}, null, children);
-  for (const child of children) child.parent = element;
+  for (const child of children) {
+    child.parent = element;
+  }
   return element;
 };
 
@@ -77,7 +79,9 @@ test("layoutMode is block when a child is a block element", () => {
   const body = document.children[0]!;
   assert.equal(body.layoutMode(), "block");
   assert.equal(body.children.length, 2);
-  for (const p of body.children as BlockLayout[]) assert.equal(p.layoutMode(), "inline");
+  for (const p of body.children as BlockLayout[]) {
+    assert.equal(p.layoutMode(), "inline");
+  }
 });
 
 test("block children stack vertically", () => {
@@ -126,7 +130,9 @@ test("wraps at the window width", () => {
   const { document, displayList } = render(el("body", new Text("word ".repeat(200))));
   const ys = new Set(texts(displayList).map((cmd) => cmd.top));
   assert.ok(ys.size > 1);
-  for (const cmd of texts(displayList)) assert.ok(cmd.left < WIDTH - HSTEP);
+  for (const cmd of texts(displayList)) {
+    assert.ok(cmd.left < WIDTH - HSTEP);
+  }
   assert.ok(document.y + document.height > Math.max(...ys));
 });
 

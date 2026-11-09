@@ -3,7 +3,9 @@ import { Socket } from "./socket.ts";
 
 function split1(s: string, sep: string): [string, string] {
   const i = s.indexOf(sep);
-  if (i === -1) throw new Error(`expected ${JSON.stringify(sep)} in ${JSON.stringify(s)}`);
+  if (i === -1) {
+    throw new Error(`expected ${JSON.stringify(sep)} in ${JSON.stringify(s)}`);
+  }
   return [s.slice(0, i), s.slice(i + sep.length)];
 }
 
@@ -195,7 +197,9 @@ export function parseUrl(url: string): URL {
     );
   }
 
-  if (!rest.includes("/")) rest = rest + "/";
+  if (!rest.includes("/")) {
+    rest = rest + "/";
+  }
   let host: string;
   [host, rest] = split1(rest, "/");
   const path = "/" + rest;

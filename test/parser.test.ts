@@ -47,8 +47,11 @@ test("Parser clears closing root tags before processing trailing input", () => {
     const root = parse(`<html><head></head><body>hello</body></html>${suffix}`);
     const text: string[] = [];
     function collect(node: Token): void {
-      if (node instanceof Text) text.push(node.text);
-      else node.children.forEach(collect);
+      if (node instanceof Text) {
+        text.push(node.text);
+      } else {
+        node.children.forEach(collect);
+      }
     }
     collect(root);
     assert.deepEqual(text, suffix.includes("after") ? ["hello", "after"] : ["hello"]);

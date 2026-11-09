@@ -1,3 +1,4 @@
+import { Rect } from "./rect.ts";
 import type { Align, DrawCommand, FontStyle, FontWeight } from "./types.ts";
 import {
   WIDTH,
@@ -148,6 +149,10 @@ export class BlockLayout {
     this.children.push(newLine);
   }
 
+  selfRect(): Rect {
+    return new Rect(this.x, this.y, this.x + this.width, this.y + this.height);
+  }
+
   paint(): DrawCommand[] {
     const cmds: DrawCommand[] = [];
     const bgcolor =
@@ -155,9 +160,7 @@ export class BlockLayout {
         ? (this.node.style["background-color"] ?? "transparent")
         : "transparent";
     if (bgcolor !== "transparent") {
-      const x2 = this.x + this.width;
-      const y2 = this.y + this.height;
-      cmds.push(new DrawRect(this.x, this.y, x2, y2, bgcolor));
+      cmds.push(new DrawRect(this.selfRect(), bgcolor));
     }
     return cmds;
   }
