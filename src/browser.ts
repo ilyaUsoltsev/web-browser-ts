@@ -1,204 +1,74 @@
-import { Window, type MouseEventProps } from "skia-canvas";
-import type { LayoutObject } from "./layout.ts";
+import { Window } from "skia-canvas";
+import { WIDTH, HEIGHT, SCROLL_STEP } from "./constants.ts";
+import { Tab } from "./tab.ts";
 import type { URL } from "./url.ts";
-import { treeToList } from "./utils.ts";
-import { CSSParser, DEFAULT_STYLE_SHEET, style } from "./css-parser.ts";
-import { Parser } from "./parser.ts";
-import { Element, type Token } from "./tokens.ts";
-import { WIDTH, HSTEP, VSTEP, HEIGHT, SCROLL_STEP } from "./constants.ts";
-import { DocumentLayout, paintTree } from "./layout.ts";
-import { Text } from "./tokens.ts";
-import type { DrawCommand } from "./types.ts";
-import fs from "fs";
-import { cascadePriority } from "./utils.ts";
 
 export class Browser {
   window!: Window;
-  displayList: DrawCommand[] = [];
-  totalHeight = 0;
-  document!: DocumentLayout;
-  scroll = 0;
-  scrollbarHeight = 0;
-  scrollbarY = 0;
-  url!: URL;
+  tabs: Tab[] = [];
+  activeTab: Tab | null = null;
 
-  // The window is created only once there is something to draw. skia-canvas
-  // sends canvas contents to the screen only during its event dispatch, so
-  // anything drawn after an `await` (while the window sits idle) would not
-  // show up until the next UI event, such as a mouse hover. Creating the
-  // window and drawing in the same tick means the first frame already has the
-  // page in it.
+  // Create and draw in the same tick so skia-canvas displays the first frame.
   private openWindow(): void {
-    if (this.window) {
-      return;
-    }
+    if (this.window) return;
     this.window = new Window(WIDTH, HEIGHT, {
       title: "Browser",
       background: "white",
       fit: "resize",
     });
-
     this.window.on("keydown", (e) => {
-      if (e.key === "ArrowDown") {
-        this.scrolldown();
-      } else if (e.key === "ArrowUp") {
-        this.scrollup();
-      }
-    });
-
-    this.window.on("wheel", (e) => {
-      if (e.deltaY > 0) {
-        this.scrollup(SCROLL_STEP / 10);
-      } else if (e.deltaY < 0) {
-        this.scrolldown(SCROLL_STEP / 10);
-      }
-    });
-
-    this.window.on("resize", (e) => {
-      this.window.height = e.height;
-      this.window.width = e.width;
-      this.layout();
+      if (e.key === "ArrowDown") this.activeTab?.scrolldown();
+      else if (e.key === "ArrowUp") this.activeTab?.scrollup();
+      else return;
       this.draw();
     });
-
+    this.window.on("wheel", (e) => {
+      if (e.deltaY > 0) this.activeTab?.scrollup(SCROLL_STEP / 10);
+      else if (e.deltaY < 0) this.activeTab?.scrolldown(SCROLL_STEP / 10);
+      this.draw();
+    });
+    this.window.on("resize", (e) => {
+      this.window.width = e.width;
+      this.window.height = e.height;
+      for (const tab of this.tabs) {
+        tab.width = e.width;
+        tab.height = e.height;
+        tab.layout();
+      }
+      this.draw();
+    });
     this.window.on("mousedown", (e) => {
-      this.click(e);
+      if (e.button === 0) {
+        void this.click(e.x, e.y).catch(console.error);
+      }
     });
   }
 
-  async click(
-    e: {
-      target: Window;
-      type: "mousedown";
-    } & MouseEventProps,
-  ): Promise<void> {
-    // Handle click events here
-    let { x, y } = e;
-    y += this.scroll;
-    const objects = treeToList<LayoutObject>(this.document, []).filter(
-      (obj) => x >= obj.x && x <= obj.x + obj.width && y >= obj.y && y <= obj.y + obj.height,
-    );
-    if (objects.length === 0) {
-      return;
-    }
-
-    let clickedEl: Token | undefined | null = objects[objects.length - 1]?.node;
-    while (clickedEl) {
-      if (clickedEl instanceof Text) {
-        clickedEl = clickedEl.parent;
-        continue;
-      } else if (
-        clickedEl instanceof Element &&
-        clickedEl.name === "a" &&
-        clickedEl.attributes.href
-      ) {
-        const url = this.url.resolve(clickedEl.attributes.href);
-        await this.load(url);
-        return;
-      }
-      clickedEl = clickedEl.parent;
-    }
-  }
-
-  async load(url: URL): Promise<void> {
-    this.url = url;
-    const body = await url.request();
-    this.openWindow();
-    if (url.skipParsing) {
-      // this.layout = layout(body, this.window.width);
-    } else {
-      const parser = new Parser(body);
-      const root: Element | undefined = parser.parse();
-
-      if (!root) {
-        throw new Error("Failed to parse HTML");
-      }
-
-      // read all css links
-      const links = treeToList(root, []).flatMap((child) =>
-        child instanceof Element &&
-        child.name === "link" &&
-        child.attributes.rel === "stylesheet" &&
-        Boolean(child.attributes.href)
-          ? [child.attributes.href]
-          : [],
-      ) as string[];
-
-      const rules = [...DEFAULT_STYLE_SHEET];
-
-      for (const link of links) {
-        const linkUrl = url.resolve(link);
-        const cssFile = fs.readFileSync(linkUrl.path, "utf-8");
-        const linkRules = new CSSParser(cssFile).parse();
-        rules.push(...linkRules);
-      }
-
-      style(
-        root,
-        rules.sort((a, b) => cascadePriority(a) - cascadePriority(b)),
-      );
-
-      this.document = new DocumentLayout(root);
-      this.layout();
-    }
+  async click(x: number, y: number): Promise<void> {
+    await this.activeTab?.click(x, y);
     this.draw();
   }
 
-  layout(): void {
-    if (!this.document) {
-      return;
+  async newTab(url: URL): Promise<void> {
+    const tab = new Tab(this.window?.width ?? WIDTH, this.window?.height ?? HEIGHT);
+    await tab.load(url);
+    this.openWindow();
+    // The shared window may have resized while the page was loading.
+    if (tab.width !== this.window.width || tab.height !== this.window.height) {
+      tab.width = this.window.width;
+      tab.height = this.window.height;
+      tab.layout();
     }
-    this.document.layout(this.window.width);
-    this.displayList = [];
-    paintTree(this.document, this.displayList);
-    this.totalHeight = this.document.height + 2 * VSTEP;
+    this.tabs.push(tab);
+    this.activeTab = tab;
+    this.draw();
   }
 
   draw(): void {
+    if (!this.window) return;
     const ctx = this.window.ctx;
     ctx.fillStyle = "white";
     ctx.fillRect(0, 0, this.window.width, this.window.height);
-
-    for (const cmd of this.displayList) {
-      if (cmd.top > this.scroll + this.window.height) {
-        continue;
-      }
-      if (cmd.bottom < this.scroll) {
-        continue;
-      }
-      cmd.execute(this.scroll, ctx);
-    }
-
-    // Add scrollbar
-    ctx.fillStyle = "gray";
-    this.scrollbarHeight = (this.window.height * this.window.height) / this.totalHeight;
-    this.scrollbarY = (this.scroll * this.window.height) / this.totalHeight;
-
-    if (this.scrollbarHeight >= this.window.height) {
-      return;
-    }
-
-    ctx.fillRect(
-      this.window.width - HSTEP / 2,
-      this.scrollbarY,
-      this.window.width,
-      this.scrollbarHeight,
-    );
-  }
-
-  scrolldown(step = SCROLL_STEP): void {
-    if (this.scrollbarY + this.scrollbarHeight >= this.window.height) {
-      return;
-    }
-    this.scroll += step;
-    this.draw();
-  }
-
-  scrollup(step = SCROLL_STEP): void {
-    this.scroll -= step;
-    if (this.scroll < 0) {
-      this.scroll = 0;
-    }
-    this.draw();
+    this.activeTab?.draw(ctx);
   }
 }
