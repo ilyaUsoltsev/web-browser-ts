@@ -77,7 +77,7 @@ test("layoutMode is block when a child is a block element", () => {
   const body = document.children[0]!;
   assert.equal(body.layoutMode(), "block");
   assert.equal(body.children.length, 2);
-  for (const p of body.children) assert.equal(p.layoutMode(), "inline");
+  for (const p of body.children as BlockLayout[]) assert.equal(p.layoutMode(), "inline");
 });
 
 test("block children stack vertically", () => {

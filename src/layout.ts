@@ -12,7 +12,7 @@ import { type Token, Text, Element } from "./tokens.ts";
 import { type Font, getFont } from "./fonts.ts";
 import { DrawRect, DrawText } from "./draw.ts";
 
-type LayoutObject = DocumentLayout | BlockLayout;
+type LayoutObject = DocumentLayout | BlockLayout | LineLayout | TextLayout;
 
 export class DocumentLayout {
   node: Token;
@@ -50,7 +50,7 @@ export class BlockLayout {
   node: Token;
   parent: LayoutObject;
   previous: BlockLayout | null;
-  children: BlockLayout[] = [];
+  children: (BlockLayout | LineLayout)[] = [];
   x = 0;
   y = 0;
   width = 0;
@@ -100,19 +100,15 @@ export class BlockLayout {
         previous = next;
       }
     } else {
-      this.cursorX = 0;
-      this.cursorY = 0;
-      this.line = [];
+      this.newLine();
       this.recurse(this.node);
-      this.flush();
     }
 
     for (const child of this.children) {
       child.layout();
     }
 
-    this.height =
-      mode === "block" ? this.children.reduce((sum, child) => sum + child.height, 0) : this.cursorY;
+    this.height = this.children.reduce((sum, child) => sum + child.height, 0);
   }
 
   recurse(node: Token): void {
@@ -127,7 +123,7 @@ export class BlockLayout {
       }
     } else {
       if (node.name === "br") {
-        this.flush();
+        this.newLine();
       }
       for (const child of node.children) {
         this.recurse(child);
@@ -167,15 +163,24 @@ export class BlockLayout {
   word(word: string, node: Token): void {
     const fontWeight = node.style["font-weight"] as FontWeight;
     const fontStyle = node.style["font-style"] as FontStyle;
-    const color = node.style["color"] as string;
     const size = parseFloat(node.style["font-size"] ?? `${DEFAULT_FONT_SIZE}px`);
     const font = getFont(size, fontWeight, fontStyle);
     const w = font.measure(word);
     if (this.cursorX + w > this.width) {
-      this.flush();
+      this.newLine();
     }
-    this.line.push({ x: this.cursorX, word, font, color });
+    const line = this.children[this.children.length - 1] as LineLayout;
+    const previousWord = line.children[line.children.length - 1] ?? null;
+    const text = new TextLayout(node, word, line, previousWord);
+    line.children.push(text);
     this.cursorX += w + font.measure(" ");
+  }
+
+  newLine(): void {
+    this.cursorX = 0;
+    const lastLine = (this.children[this.children.length - 1] as LineLayout | undefined) ?? null;
+    const newLine = new LineLayout(this.node, this, lastLine);
+    this.children.push(newLine);
   }
 
   paint(): DrawCommand[] {
@@ -202,5 +207,48 @@ export function paintTree(layoutObject: LayoutObject, displayList: DrawCommand[]
   displayList.push(...layoutObject.paint());
   for (const child of layoutObject.children) {
     paintTree(child, displayList);
+  }
+}
+
+class TextLayout {
+  children: never[] = [];
+  x = 0;
+  y = 0;
+  width = 0;
+  height = 0;
+
+  constructor(
+    public node: Token,
+    public word: string,
+    public parent: LineLayout,
+    public previous: TextLayout | null,
+  ) {}
+
+  // TODO: compute font, size and position.
+  layout(): void {}
+
+  paint(): DrawCommand[] {
+    return [];
+  }
+}
+
+class LineLayout {
+  children: TextLayout[] = [];
+  x = 0;
+  y = 0;
+  width = 0;
+  height = 0;
+
+  constructor(
+    public node: Token,
+    public parent: BlockLayout,
+    public previous: LineLayout | null,
+  ) {}
+
+  // TODO: lay out words and compute line height (port of BlockLayout.flush).
+  layout(): void {}
+
+  paint(): DrawCommand[] {
+    return [];
   }
 }
