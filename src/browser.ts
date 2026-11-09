@@ -93,6 +93,7 @@ export class Browser {
     ctx.fillStyle = "white";
     ctx.fillRect(0, 0, this.window.width, this.window.height);
     this.activeTab?.draw(ctx, this.chrome.bottom);
+
     for (const cmd of this.chrome.paint()) {
       cmd.execute(0, ctx);
     }
