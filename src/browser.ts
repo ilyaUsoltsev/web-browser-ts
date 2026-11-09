@@ -9,6 +9,7 @@ export class Browser {
   tabs: Tab[] = [];
   activeTab: Tab | null = null;
   chrome = new Chrome(this);
+  private keepAlive = (): void => {};
 
   // Create and draw in the same tick so skia-canvas displays the first frame.
   private openWindow(): void {
@@ -49,9 +50,20 @@ export class Browser {
       this.draw();
     });
     this.window.on("mousedown", (e) => {
-      if (e.button === 0) {
-        void this.click(e.x, e.y).catch(console.error);
+      if (e.button !== 0) {
+        return;
       }
+      // skia-canvas only pushes the canvas to screen when its native loop
+      // dispatches (OS event or animating window). Keep it animating while the
+      // async click (e.g. a network load) runs, so the result shows up without
+      // waiting for the next mouse move.
+      this.window.on("frame", this.keepAlive);
+      void this.click(e.x, e.y)
+        .catch(console.error)
+        .finally(() => {
+          // Remove on the next frame: that frame's dispatch ships the drawn canvas.
+          this.window.once("frame", () => this.window.off("frame", this.keepAlive));
+        });
     });
   }
 
