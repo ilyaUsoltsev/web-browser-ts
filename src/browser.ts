@@ -11,7 +11,7 @@ import fs from "fs";
 import { cascadePriority } from "./utils.ts";
 
 export class Browser {
-  window: Window;
+  window!: Window;
   displayList: DrawCommand[] = [];
   totalHeight = 0;
   document: DocumentLayout | undefined;
@@ -19,7 +19,16 @@ export class Browser {
   scrollbarHeight = 0;
   scrollbarY = 0;
 
-  constructor() {
+  // The window is created only once there is something to draw. skia-canvas
+  // sends canvas contents to the screen only during its event dispatch, so
+  // anything drawn after an `await` (while the window sits idle) would not
+  // show up until the next UI event, such as a mouse hover. Creating the
+  // window and drawing in the same tick means the first frame already has the
+  // page in it.
+  private openWindow(): void {
+    if (this.window) {
+      return;
+    }
     this.window = new Window(WIDTH, HEIGHT, {
       title: "Browser",
       background: "white",
@@ -52,6 +61,7 @@ export class Browser {
 
   async load(url: URL): Promise<void> {
     const body = await url.request();
+    this.openWindow();
     if (url.skipParsing) {
       // this.layout = layout(body, this.window.width);
     } else {
