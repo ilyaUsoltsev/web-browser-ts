@@ -12,7 +12,7 @@ import { type Token, Text, Element } from "./tokens.ts";
 import { type Font, getFont } from "./fonts.ts";
 import { DrawRect, DrawText } from "./draw.ts";
 
-type LayoutObject = DocumentLayout | BlockLayout | LineLayout | TextLayout;
+export type LayoutObject = DocumentLayout | BlockLayout | LineLayout | TextLayout;
 
 export class DocumentLayout {
   node: Token;
@@ -170,7 +170,7 @@ export function paintTree(layoutObject: LayoutObject, displayList: DrawCommand[]
   }
 }
 
-class TextLayout {
+export class TextLayout {
   children: never[] = [];
   x = 0;
   y = 0;
@@ -207,7 +207,7 @@ class TextLayout {
   }
 }
 
-class LineLayout {
+export class LineLayout {
   children: TextLayout[] = [];
   x = 0;
   y = 0;

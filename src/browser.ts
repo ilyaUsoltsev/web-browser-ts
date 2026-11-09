@@ -1,11 +1,13 @@
-import { Window } from "skia-canvas";
+import { Window, type MouseEventProps } from "skia-canvas";
+import type { LayoutObject } from "./layout.ts";
 import type { URL } from "./url.ts";
 import { treeToList } from "./utils.ts";
 import { CSSParser, DEFAULT_STYLE_SHEET, style } from "./css-parser.ts";
 import { Parser } from "./parser.ts";
-import { Element } from "./tokens.ts";
+import { Element, type Token } from "./tokens.ts";
 import { WIDTH, HSTEP, VSTEP, HEIGHT, SCROLL_STEP } from "./constants.ts";
 import { DocumentLayout, paintTree } from "./layout.ts";
+import { Text } from "./tokens.ts";
 import type { DrawCommand } from "./types.ts";
 import fs from "fs";
 import { cascadePriority } from "./utils.ts";
@@ -14,10 +16,11 @@ export class Browser {
   window!: Window;
   displayList: DrawCommand[] = [];
   totalHeight = 0;
-  document: DocumentLayout | undefined;
+  document!: DocumentLayout;
   scroll = 0;
   scrollbarHeight = 0;
   scrollbarY = 0;
+  url!: URL;
 
   // The window is created only once there is something to draw. skia-canvas
   // sends canvas contents to the screen only during its event dispatch, so
@@ -57,9 +60,48 @@ export class Browser {
       this.layout();
       this.draw();
     });
+
+    this.window.on("mousedown", (e) => {
+      this.click(e);
+    });
+  }
+
+  async click(
+    e: {
+      target: Window;
+      type: "mousedown";
+    } & MouseEventProps,
+  ): Promise<void> {
+    // Handle click events here
+    let { x, y } = e;
+    y += this.scroll;
+    const objects = treeToList<LayoutObject>(this.document, []).filter(
+      (obj) => x >= obj.x && x <= obj.x + obj.width && y >= obj.y && y <= obj.y + obj.height,
+    );
+    if (objects.length === 0) {
+      return;
+    }
+
+    let clickedEl: Token | undefined | null = objects[objects.length - 1]?.node;
+    while (clickedEl) {
+      if (clickedEl instanceof Text) {
+        clickedEl = clickedEl.parent;
+        continue;
+      } else if (
+        clickedEl instanceof Element &&
+        clickedEl.name === "a" &&
+        clickedEl.attributes.href
+      ) {
+        const url = this.url.resolve(clickedEl.attributes.href);
+        await this.load(url);
+        return;
+      }
+      clickedEl = clickedEl.parent;
+    }
   }
 
   async load(url: URL): Promise<void> {
+    this.url = url;
     const body = await url.request();
     this.openWindow();
     if (url.skipParsing) {
