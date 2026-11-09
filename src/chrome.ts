@@ -14,7 +14,6 @@ export class Chrome {
   tabbarBottom: number;
   newtabRect: Rect;
   backRect: Rect;
-  addressRect: Rect;
   urlbarTop: number;
   urlbarBottom: number;
   bottom: number;
@@ -41,10 +40,15 @@ export class Chrome {
       this.padding + backWidth,
       this.urlbarBottom - this.padding,
     );
-    this.addressRect = new Rect(
+  }
+
+  // Computed on demand so the address bar follows window resizes.
+  get addressRect(): Rect {
+    const width = this.browser.window?.width ?? WIDTH;
+    return new Rect(
       this.backRect.right + this.padding,
       this.urlbarTop + this.padding,
-      WIDTH - this.padding,
+      width - this.padding,
       this.urlbarBottom - this.padding,
     );
   }
@@ -88,22 +92,17 @@ export class Chrome {
           new DrawLine(bounds.left + 1, bounds.bottom, bounds.right - 1, bounds.bottom, "white", 1),
         );
       }
-      cmds.push(new DrawOutline(this.backRect, "black", 1));
-      cmds.push(
-        new DrawText(this.backRect.left + this.padding, this.backRect.top, "<", this.font, "black"),
-      );
-      cmds.push(new DrawOutline(this.addressRect, "black", 1));
-      const url = this.browser.activeTab?.url.getUrlString() ?? "";
-      cmds.push(
-        new DrawText(
-          this.addressRect.left + this.padding,
-          this.addressRect.top,
-          url,
-          this.font,
-          "black",
-        ),
-      );
     });
+    cmds.push(new DrawOutline(this.backRect, "black", 1));
+    cmds.push(
+      new DrawText(this.backRect.left + this.padding, this.backRect.top, "<", this.font, "black"),
+    );
+    const addressRect = this.addressRect;
+    cmds.push(new DrawOutline(addressRect, "black", 1));
+    const url = this.browser.activeTab?.url.getUrlString() ?? "";
+    cmds.push(
+      new DrawText(addressRect.left + this.padding, addressRect.top, url, this.font, "black"),
+    );
     return cmds;
   }
 
