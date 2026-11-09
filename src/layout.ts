@@ -43,7 +43,7 @@ export class DocumentLayout {
   }
 }
 
-type LineItem = { x: number; word: string; font: Font; align: Align; color: string };
+type LineItem = { x: number; word: string; font: Font; color: string };
 type DisplayItem = { x: number; y: number; word: string; font: Font; color: string };
 
 export class BlockLayout {
@@ -60,10 +60,6 @@ export class BlockLayout {
   line: LineItem[] = [];
   cursorX = 0;
   cursorY = 0;
-  weight: FontWeight = "normal";
-  fontStyle: FontStyle = "roman";
-  size = DEFAULT_FONT_SIZE;
-  align: Align = "left";
 
   constructor(node: Token, parent: LayoutObject, previous: BlockLayout | null) {
     this.node = node;
@@ -106,10 +102,6 @@ export class BlockLayout {
     } else {
       this.cursorX = 0;
       this.cursorY = 0;
-      this.weight = "normal";
-      this.fontStyle = "roman";
-      this.size = DEFAULT_FONT_SIZE;
-      this.align = "left";
       this.line = [];
       this.recurse(this.node);
       this.flush();
@@ -153,7 +145,9 @@ export class BlockLayout {
 
     const maxAscent = Math.max(...this.line.map(({ font }) => font.ascent));
     const baseline = this.cursorY + LINE_HEIGHT_MULTIPLIER * maxAscent;
-    for (const { x: relX, word, font, align, color } of this.line) {
+    // text-align belongs to the block container, so the whole line shares it.
+    const align = this.node.style["text-align"] as Align;
+    for (const { x: relX, word, font, color } of this.line) {
       let x = this.x + relX;
       if (align === "center") {
         x += (this.width - lineWidth) / 2;
@@ -180,7 +174,7 @@ export class BlockLayout {
     if (this.cursorX + w > this.width) {
       this.flush();
     }
-    this.line.push({ x: this.cursorX, word, font, align: this.align, color });
+    this.line.push({ x: this.cursorX, word, font, color });
     this.cursorX += w + font.measure(" ");
   }
 

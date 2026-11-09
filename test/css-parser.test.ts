@@ -81,3 +81,9 @@ test("percentage font size on the root is relative to the default font size", ()
   style(root, []);
   assert.equal(root.style["font-size"], "8px");
 });
+
+test("comments are skipped like whitespace", () => {
+  const rules = new CSSParser("/* top */ h1 /* a */ { color: /* b */ red; /* c */ } /* end").parse();
+  assert.equal(rules.length, 1);
+  assert.deepEqual(rules[0]!.body, { color: "red" });
+});

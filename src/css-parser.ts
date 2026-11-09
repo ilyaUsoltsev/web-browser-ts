@@ -45,9 +45,17 @@ export class CSSParser {
     private position: number = 0,
   ) {}
 
+  // Skips whitespace and /* comments */, which CSS treats the same way.
   whitespace() {
-    while (this.position < this.text.length && /\s/.test(this.text[this.position]!)) {
-      this.position++;
+    while (this.position < this.text.length) {
+      if (/\s/.test(this.text[this.position]!)) {
+        this.position++;
+      } else if (this.text.startsWith("/*", this.position)) {
+        const end = this.text.indexOf("*/", this.position + 2);
+        this.position = end === -1 ? this.text.length : end + 2;
+      } else {
+        break;
+      }
     }
   }
 

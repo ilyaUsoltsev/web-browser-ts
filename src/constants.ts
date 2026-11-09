@@ -82,4 +82,5 @@ export const INHERITED_PROPERTIES = {
   "font-style": "normal",
   "font-weight": "normal",
   color: "black",
+  "text-align": "left",
 };

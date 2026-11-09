@@ -15,7 +15,11 @@ import {
 } from "../src/constants.ts";
 import type { DrawCommand } from "../src/types.ts";
 
-const el = (name: string, ...children: (Text | Element)[]) => new Element(name, {}, null, children);
+const el = (name: string, ...children: (Text | Element)[]) => {
+  const element = new Element(name, {}, null, children);
+  for (const child of children) child.parent = element;
+  return element;
+};
 
 function render(root: Element, width = WIDTH) {
   style(
@@ -34,7 +38,7 @@ const texts = (displayList: DrawCommand[]) =>
 
 test("getFont caches fonts", () => {
   assert.equal(getFont(14, "bold", "italic"), getFont(14, "bold", "italic"));
-  assert.notEqual(getFont(14, "bold", "roman"), getFont(14, "normal", "roman"));
+  assert.notEqual(getFont(14, "bold", "normal"), getFont(14, "normal", "normal"));
 });
 
 test("head remains in HTML but contributes no layout or visible text", () => {
@@ -56,7 +60,7 @@ test("head remains in HTML but contributes no layout or visible text", () => {
 
 test("places words left to right on one line", () => {
   const { displayList } = render(el("body", new Text("ab cd")));
-  const font = getFont(DEFAULT_FONT_SIZE, "normal", "roman");
+  const font = getFont(DEFAULT_FONT_SIZE, "normal", "normal");
   const y = VSTEP + LINE_HEIGHT_MULTIPLIER * font.ascent - font.ascent;
   const [ab, cd] = texts(displayList);
   assert.equal(texts(displayList).length, 2);
@@ -131,4 +135,24 @@ test("wraps earlier in a narrower window", () => {
   const wide = render(root, WIDTH).document.height;
   const narrow = render(root, WIDTH / 2).document.height;
   assert.ok(narrow > wide);
+});
+
+test("h1 text is 2x the default size and centered, inherited by its text", () => {
+  const { displayList } = render(el("body", el("h1", new Text("Hi"))));
+  const [hi] = texts(displayList);
+  const font = getFont(DEFAULT_FONT_SIZE * 2, "normal", "normal");
+  assert.equal(hi!.font, font);
+  assert.equal(hi!.left, HSTEP + (WIDTH - 2 * HSTEP - font.measure("Hi")) / 2);
+});
+
+test("<right> aligns its line to the right edge", () => {
+  const { displayList } = render(el("body", el("right", new Text("end")), el("p", new Text("x"))));
+  const [end] = texts(displayList);
+  const font = getFont(DEFAULT_FONT_SIZE, "normal", "normal");
+  assert.equal(end!.left, WIDTH - HSTEP - font.measure("end"));
+});
+
+test("small shrinks its text via the stylesheet", () => {
+  const { displayList } = render(el("body", el("small", new Text("tiny"))));
+  assert.equal(texts(displayList)[0]!.font, getFont(DEFAULT_FONT_SIZE * 0.9, "normal", "normal"));
 });
