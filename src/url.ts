@@ -138,6 +138,34 @@ export class URL {
   async request(): Promise<string> {
     return this.strategy.request(this);
   }
+
+  resolve(url: string) {
+    if (url.includes("://")) {
+      return parseUrl(url);
+    }
+    if (url.startsWith("//")) {
+      return parseUrl(this.scheme + ":" + url);
+    }
+    if (!url.startsWith("/")) {
+      // Relative path: resolve against the current page's directory.
+      let dir = this.path.slice(0, this.path.lastIndexOf("/"));
+      // Each leading "../" climbs one directory, stopping at the root.
+      while (url.startsWith("../")) {
+        url = url.slice("../".length);
+        if (dir.includes("/")) {
+          dir = dir.slice(0, dir.lastIndexOf("/"));
+        }
+      }
+      url = dir + "/" + url;
+    }
+    return parseUrl(
+      this.scheme +
+        "://" +
+        this.host +
+        (this.port !== this.strategy.defaultPort ? ":" + this.port : "") +
+        url,
+    );
+  }
 }
 
 // Factory: the only place that knows how to go from a raw string to a

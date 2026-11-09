@@ -3,6 +3,7 @@ import { Element, type Token } from "./tokens.ts";
 export type Selector = TagSelector | DescendantSelector;
 
 export class TagSelector {
+  priority = 1;
   constructor(public tagName: string) {}
 
   matches(node: Token) {
@@ -11,10 +12,13 @@ export class TagSelector {
 }
 
 export class DescendantSelector {
+  priority: number;
   constructor(
     public ancestor: Selector,
     public descendant: Selector,
-  ) {}
+  ) {
+    this.priority = ancestor.priority + descendant.priority;
+  }
 
   matches(node: Token) {
     if (!this.descendant.matches(node)) {

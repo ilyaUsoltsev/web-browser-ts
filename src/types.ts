@@ -1,4 +1,5 @@
 import type { CanvasRenderingContext2D } from "skia-canvas";
+import type { Selector } from "./selectors.ts";
 
 export type FontWeight = "normal" | "bold";
 export type FontStyle = "roman" | "italic";
@@ -9,3 +10,5 @@ export interface DrawCommand {
   bottom: number;
   execute(scroll: number, canvas: CanvasRenderingContext2D): void;
 }
+
+export type Rule = { selector: Selector; body: Record<string, string> };

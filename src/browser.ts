@@ -1,14 +1,16 @@
 import { Window } from "skia-canvas";
 import type { URL } from "./url.ts";
+import { treeToList } from "./utils.ts";
 import { CSSParser } from "./css-parser.ts";
 import { Parser } from "./parser.ts";
-import type { Element } from "./tokens.ts";
+import { Element } from "./tokens.ts";
 import { WIDTH, HSTEP, VSTEP, HEIGHT, SCROLL_STEP } from "./constants.ts";
 import { DocumentLayout, paintTree } from "./layout.ts";
 import type { DrawCommand } from "./types.ts";
 import { style } from "./css-parser.ts";
 import { URL as NodeURL } from "node:url";
 import fs from "fs";
+import { cascadePriority } from "./utils.ts";
 
 const browserCssPath = new NodeURL("../browser.css", import.meta.url);
 
@@ -59,12 +61,37 @@ export class Browser {
     } else {
       const parser = new Parser(body);
       const root: Element | undefined = parser.parse();
+
       if (!root) {
         throw new Error("Failed to parse HTML");
       }
-      const cssFile = fs.readFileSync(browserCssPath, "utf-8");
 
-      style(root, new CSSParser(cssFile).parse());
+      // read all css links
+      const links = treeToList(root, []).flatMap((child) =>
+        child instanceof Element &&
+        child.name === "link" &&
+        child.attributes.rel === "stylesheet" &&
+        Boolean(child.attributes.href)
+          ? [child.attributes.href]
+          : [],
+      ) as string[];
+
+      // get default browser CSS
+      const cssFile = fs.readFileSync(browserCssPath, "utf-8");
+      const rules = new CSSParser(cssFile).parse();
+
+      for (const link of links) {
+        const linkUrl = url.resolve(link);
+        const cssFile = fs.readFileSync(linkUrl.path, "utf-8");
+        const linkRules = new CSSParser(cssFile).parse();
+        rules.push(...linkRules);
+      }
+
+      style(
+        root,
+        rules.sort((a, b) => cascadePriority(a) - cascadePriority(b)),
+      );
+
       this.document = new DocumentLayout(root);
       this.layout();
     }

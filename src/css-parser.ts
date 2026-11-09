@@ -1,10 +1,8 @@
 import { Element, type Token } from "./tokens.ts";
 import { TagSelector, DescendantSelector, type Selector } from "./selectors.ts";
+import type { Rule } from "./types.ts";
 
-export function style(
-  node: Token,
-  rules: { selector: Selector; body: Record<string, string> }[],
-): void {
+export function style(node: Token, rules: Rule[]): void {
   if (node instanceof Element) {
     for (const rule of rules) {
       if (!rule.selector.matches(node)) {
@@ -84,7 +82,7 @@ export class CSSParser {
   }
 
   parse() {
-    const rules: { selector: Selector; body: Record<string, string> }[] = [];
+    const rules: Rule[] = [];
     this.whitespace();
     while (this.position < this.text.length) {
       try {
