@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { CSSParser } from "../src/css-parser.ts";
+import { CSSParser, style } from "../src/css-parser.ts";
 import { Element } from "../src/tokens.ts";
 
 test("CSS rule parsing skips invalid selectors and keeps later rules", () => {
@@ -61,4 +61,23 @@ test("CSS recovery stops before the delimiter or at end of input", () => {
 test("CSS words require at least one supported character", () => {
   assert.throws(() => new CSSParser(":").word(), /Expected word/);
   assert.throws(() => new CSSParser("color:").pair(), /Expected word/);
+});
+
+test("percentage font sizes resolve to px before being inherited", () => {
+  const code = new Element("code");
+  const h1 = new Element("h1", {}, null, [code]);
+  const root = new Element("html", {}, null, [h1]);
+  h1.parent = root;
+  code.parent = h1;
+  style(root, [
+    { selector: new CSSParser("h1").selector(), body: { "font-size": "150%" } },
+  ]);
+  assert.equal(h1.style["font-size"], "24px");
+  assert.equal(code.style["font-size"], "24px");
+});
+
+test("percentage font size on the root is relative to the default font size", () => {
+  const root = new Element("html", { style: "font-size: 50%" });
+  style(root, []);
+  assert.equal(root.style["font-size"], "8px");
 });

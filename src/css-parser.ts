@@ -20,6 +20,19 @@ export function style(node: Token, rules: Rule[]): void {
       }
     }
     node.style = Object.assign(node.style, new CSSParser(node.attributes["style"] ?? "").body());
+
+    // Resolve percentage font sizes to px (the "computed style") so children
+    // inherit an absolute size rather than compounding the percentage.
+    const fontSize = node.style["font-size"];
+    if (fontSize?.endsWith("%")) {
+      const parentFontSize =
+        node.parent instanceof Element
+          ? node.parent.style["font-size"]!
+          : INHERITED_PROPERTIES["font-size"];
+      const nodePct = parseFloat(fontSize.slice(0, -1)) / 100;
+      const parentPx = parseFloat(parentFontSize.slice(0, -2));
+      node.style["font-size"] = `${nodePct * parentPx}px`;
+    }
   }
   for (const child of node.children) {
     style(child, rules);
@@ -40,7 +53,7 @@ export class CSSParser {
 
   word() {
     let start = this.position;
-    while (this.position < this.text.length && /[a-zA-Z0-9_-]/.test(this.text[this.position]!)) {
+    while (this.position < this.text.length && /[a-zA-Z0-9_%-]/.test(this.text[this.position]!)) {
       this.position++;
     }
     if (this.position === start) {
