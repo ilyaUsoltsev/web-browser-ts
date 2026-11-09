@@ -1,9 +1,17 @@
 import { Element, type Token } from "./tokens.ts";
 import { TagSelector, DescendantSelector, type Selector } from "./selectors.ts";
 import type { Rule } from "./types.ts";
+import { INHERITED_PROPERTIES } from "./constants.ts";
 
 export function style(node: Token, rules: Rule[]): void {
   if (node instanceof Element) {
+    Object.entries(INHERITED_PROPERTIES).forEach(([property, defaultValue]) => {
+      if (node.parent && node.parent instanceof Element) {
+        node.style[property] = node.parent.style[property] ?? defaultValue;
+      } else {
+        node.style[property] = defaultValue;
+      }
+    });
     for (const rule of rules) {
       if (!rule.selector.matches(node)) {
         continue;

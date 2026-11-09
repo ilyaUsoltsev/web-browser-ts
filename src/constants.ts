@@ -76,3 +76,10 @@ export const BLOCK_ELEMENTS = [
   "details",
   "summary",
 ];
+
+export const INHERITED_PROPERTIES = {
+  "font-size": "16px",
+  "font-style": "normal",
+  "font-weight": "normal",
+  color: "black",
+};
