@@ -23,6 +23,7 @@ npm install
 npm start -- https://example.org/          # open a browser window (chapter 2); Down arrow scrolls
 npm start -- --text http://example.org/    # print page text to the terminal (chapter 1)
 npm start                                  # no URL: opens https://example.org/
+npm run dev                                # like start, but restarts on .ts/.css/.html changes
 npm test                                   # run tests (node:test)
 npm run typecheck                          # type-check with tsc
 ```

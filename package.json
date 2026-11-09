@@ -4,6 +4,7 @@
   "description": "Web Browser Engineering (browser.engineering), followed in TypeScript",
   "scripts": {
     "start": "tsx src/main.ts",
+    "dev": "tsx watch --include './*.css' --include './*.html' src/main.ts",
     "test": "tsx --test test/*.test.ts",
     "typecheck": "tsc"
   },
