@@ -43,8 +43,8 @@ export class DocumentLayout {
   }
 }
 
-type LineItem = { x: number; word: string; font: Font; align: Align };
-type DisplayItem = { x: number; y: number; word: string; font: Font };
+type LineItem = { x: number; word: string; font: Font; align: Align; color: string };
+type DisplayItem = { x: number; y: number; word: string; font: Font; color: string };
 
 export class BlockLayout {
   node: Token;
@@ -123,61 +123,23 @@ export class BlockLayout {
       mode === "block" ? this.children.reduce((sum, child) => sum + child.height, 0) : this.cursorY;
   }
 
-  recurse(tree: Token): void {
-    if (tree instanceof Element && tree.name === "head") {
+  recurse(node: Token): void {
+    if (node instanceof Element && node.name === "head") {
       return;
     }
-    if (tree instanceof Text) {
-      for (const word of tree.text.split(/\s+/)) {
+    if (node instanceof Text) {
+      for (const word of node.text.split(/\s+/)) {
         if (word) {
-          this.word(word);
+          this.word(word, node);
         }
       }
     } else {
-      this.openTag(tree.name);
-      for (const child of tree.children) {
+      if (node.name === "br") {
+        this.flush();
+      }
+      for (const child of node.children) {
         this.recurse(child);
       }
-      this.closeTag(tree.name);
-    }
-  }
-
-  openTag(tag: string): void {
-    if (tag === "b") {
-      this.weight = "bold";
-    } else if (tag === "i") {
-      this.fontStyle = "italic";
-      this.size = 34;
-    } else if (tag === "small") {
-      this.size = 10;
-    } else if (tag === "big") {
-      this.size = 18;
-    } else if (tag === "br") {
-      this.flush();
-    } else if (tag === "h1") {
-      this.flush();
-      this.size = 48;
-      this.align = "center";
-    } else if (tag === "right") {
-      this.flush();
-      this.align = "right";
-    }
-  }
-
-  closeTag(tag: string): void {
-    if (tag === "b") {
-      this.weight = "normal";
-    } else if (tag === "i") {
-      this.fontStyle = "roman";
-      this.size = DEFAULT_FONT_SIZE;
-    } else if (tag === "small" || tag === "big") {
-      this.size = DEFAULT_FONT_SIZE;
-    } else if (tag === "h1" || tag === "right") {
-      this.flush();
-      this.weight = "normal";
-      this.fontStyle = "roman";
-      this.size = DEFAULT_FONT_SIZE;
-      this.align = "left";
     }
   }
 
@@ -191,7 +153,7 @@ export class BlockLayout {
 
     const maxAscent = Math.max(...this.line.map(({ font }) => font.ascent));
     const baseline = this.cursorY + LINE_HEIGHT_MULTIPLIER * maxAscent;
-    for (const { x: relX, word, font, align } of this.line) {
+    for (const { x: relX, word, font, align, color } of this.line) {
       let x = this.x + relX;
       if (align === "center") {
         x += (this.width - lineWidth) / 2;
@@ -199,7 +161,7 @@ export class BlockLayout {
         x += this.width - lineWidth;
       }
       const y = this.y + baseline - font.ascent;
-      this.displayList.push({ x, y, word, font });
+      this.displayList.push({ x, y, word, font, color });
     }
 
     const maxDescent = Math.max(...this.line.map(({ font }) => font.descent));
@@ -208,13 +170,17 @@ export class BlockLayout {
     this.line = [];
   }
 
-  word(word: string): void {
-    const font = getFont(this.size, this.weight, this.fontStyle);
+  word(word: string, node: Token): void {
+    const fontWeight = node.style["font-weight"] as FontWeight;
+    const fontStyle = node.style["font-style"] as FontStyle;
+    const color = node.style["color"] as string;
+    const size = parseFloat(node.style["font-size"] ?? `${DEFAULT_FONT_SIZE}px`);
+    const font = getFont(size, fontWeight, fontStyle);
     const w = font.measure(word);
     if (this.cursorX + w > this.width) {
       this.flush();
     }
-    this.line.push({ x: this.cursorX, word, font, align: this.align });
+    this.line.push({ x: this.cursorX, word, font, align: this.align, color });
     this.cursorX += w + font.measure(" ");
   }
 
@@ -230,8 +196,8 @@ export class BlockLayout {
       cmds.push(new DrawRect(this.x, this.y, x2, y2, bgcolor));
     }
     if (this.layoutMode() === "inline") {
-      for (const { x, y, word, font } of this.displayList) {
-        cmds.push(new DrawText(x, y, word, font));
+      for (const { x, y, word, font, color } of this.displayList) {
+        cmds.push(new DrawText(x, y, word, font, color));
       }
     }
     return cmds;

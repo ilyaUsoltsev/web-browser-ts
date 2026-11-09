@@ -35,7 +35,7 @@ export const SCROLL_STEP = 100;
 export const LINE_HEIGHT_PADDING = 1;
 export const LINE_HEIGHT_MULTIPLIER = 1;
 
-export const DEFAULT_FONT_SIZE = 14;
+export const DEFAULT_FONT_SIZE = 16;
 
 export const BLOCK_ELEMENTS = [
   "html",

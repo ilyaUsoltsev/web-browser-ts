@@ -8,18 +8,20 @@ export class DrawText implements DrawCommand {
   bottom: number;
   text: string;
   font: Font;
+  color: string;
 
-  constructor(x1: number, y1: number, text: string, font: Font) {
+  constructor(x1: number, y1: number, text: string, font: Font, color: string) {
     this.top = y1;
     this.left = x1;
     this.text = text;
     this.font = font;
+    this.color = color;
     this.bottom = y1 + font.linespace;
   }
 
   execute(scroll: number, canvas: CanvasRenderingContext2D): void {
     canvas.font = this.font.css;
-    canvas.fillStyle = "black";
+    canvas.fillStyle = this.color;
     // `top` is the top of the line box, like Tk's anchor="nw"
     canvas.textBaseline = "alphabetic";
     canvas.fillText(this.text, this.left, this.top + this.font.ascent - scroll);

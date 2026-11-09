@@ -4,6 +4,7 @@ export class Text {
   text: string;
   children: Token[] = [];
   parent: Token | null = null;
+  style: Record<string, string> = {};
   constructor(text: string, parent: Token | null = null, children: Token[] = []) {
     this.text = text;
     this.children = children;

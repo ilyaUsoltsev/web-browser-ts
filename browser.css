@@ -1,3 +1,5 @@
+/* Default browser styles */
+
 h1 {
   background-color: aquamarine;
 }
@@ -9,3 +11,28 @@ p {
 pre {
   background-color: lightgray;
 }
+
+a {
+  color: blue;
+}
+
+i {
+  font-style: italic;
+}
+
+b {
+  font-weight: bold;
+}
+
+small {
+  font-size: 90%;
+}
+
+big {
+  font-size: 110%;
+}
+
+h1 {
+  font-size: 200%;
+}
+

@@ -6,14 +6,12 @@ import { URL as NodeURL } from "node:url";
 import fs from "node:fs";
 
 export function style(node: Token, rules: Rule[]): void {
+  // Every node (Text included) inherits text-related properties from its parent.
+  Object.entries(INHERITED_PROPERTIES).forEach(([property, defaultValue]) => {
+    node.style[property] = node.parent?.style[property] ?? defaultValue;
+  });
+  // Only Elements can match selectors or carry a style="" attribute.
   if (node instanceof Element) {
-    Object.entries(INHERITED_PROPERTIES).forEach(([property, defaultValue]) => {
-      if (node.parent && node.parent instanceof Element) {
-        node.style[property] = node.parent.style[property] ?? defaultValue;
-      } else {
-        node.style[property] = defaultValue;
-      }
-    });
     for (const rule of rules) {
       if (!rule.selector.matches(node)) {
         continue;
