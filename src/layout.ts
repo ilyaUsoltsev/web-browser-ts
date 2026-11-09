@@ -43,9 +43,6 @@ export class DocumentLayout {
   }
 }
 
-type LineItem = { x: number; word: string; font: Font; color: string };
-type DisplayItem = { x: number; y: number; word: string; font: Font; color: string };
-
 export class BlockLayout {
   node: Token;
   parent: LayoutObject;
@@ -56,10 +53,7 @@ export class BlockLayout {
   width = 0;
   height = 0;
 
-  displayList: DisplayItem[] = [];
-  line: LineItem[] = [];
   cursorX = 0;
-  cursorY = 0;
 
   constructor(node: Token, parent: LayoutObject, previous: BlockLayout | null) {
     this.node = node;
@@ -131,35 +125,6 @@ export class BlockLayout {
     }
   }
 
-  // Flush the current line to the display list and reset cursor positions.
-  flush(): void {
-    if (!this.line.length) {
-      return;
-    }
-    const last = this.line[this.line.length - 1]!;
-    const lineWidth = last.x + last.font.measure(last.word);
-
-    const maxAscent = Math.max(...this.line.map(({ font }) => font.ascent));
-    const baseline = this.cursorY + LINE_HEIGHT_MULTIPLIER * maxAscent;
-    // text-align belongs to the block container, so the whole line shares it.
-    const align = this.node.style["text-align"] as Align;
-    for (const { x: relX, word, font, color } of this.line) {
-      let x = this.x + relX;
-      if (align === "center") {
-        x += (this.width - lineWidth) / 2;
-      } else if (align === "right") {
-        x += this.width - lineWidth;
-      }
-      const y = this.y + baseline - font.ascent;
-      this.displayList.push({ x, y, word, font, color });
-    }
-
-    const maxDescent = Math.max(...this.line.map(({ font }) => font.descent));
-    this.cursorY = baseline + LINE_HEIGHT_MULTIPLIER * maxDescent + LINE_HEIGHT_PADDING;
-    this.cursorX = 0;
-    this.line = [];
-  }
-
   word(word: string, node: Token): void {
     const fontWeight = node.style["font-weight"] as FontWeight;
     const fontStyle = node.style["font-style"] as FontStyle;
@@ -194,11 +159,6 @@ export class BlockLayout {
       const y2 = this.y + this.height;
       cmds.push(new DrawRect(this.x, this.y, x2, y2, bgcolor));
     }
-    if (this.layoutMode() === "inline") {
-      for (const { x, y, word, font, color } of this.displayList) {
-        cmds.push(new DrawText(x, y, word, font, color));
-      }
-    }
     return cmds;
   }
 }
@@ -216,6 +176,7 @@ class TextLayout {
   y = 0;
   width = 0;
   height = 0;
+  font!: Font; // set in layout() from the computed style
 
   constructor(
     public node: Token,
@@ -224,11 +185,25 @@ class TextLayout {
     public previous: TextLayout | null,
   ) {}
 
-  // TODO: compute font, size and position.
-  layout(): void {}
+  layout(): void {
+    const weight = this.node.style["font-weight"] as FontWeight;
+    const style = this.node.style["font-style"] as FontStyle;
+    const size = parseFloat(this.node.style["font-size"] ?? `${DEFAULT_FONT_SIZE}px`);
+    this.font = getFont(size, weight, style);
+    this.width = this.font.measure(this.word);
+
+    if (this.previous) {
+      const space = this.previous.font.measure(" ");
+      this.x = this.previous.x + this.previous.width + space;
+    } else {
+      this.x = this.parent.x;
+    }
+    this.height = this.font.linespace;
+  }
 
   paint(): DrawCommand[] {
-    return [];
+    const color = this.node.style["color"] ?? "black";
+    return [new DrawText(this.x, this.y, this.word, this.font, color)];
   }
 }
 
@@ -245,8 +220,44 @@ class LineLayout {
     public previous: LineLayout | null,
   ) {}
 
-  // TODO: lay out words and compute line height (port of BlockLayout.flush).
-  layout(): void {}
+  layout(): void {
+    this.width = this.parent.width;
+    this.x = this.parent.x;
+    if (this.previous) {
+      this.y = this.previous.y + this.previous.height;
+    } else {
+      this.y = this.parent.y;
+    }
+
+    for (const textLayout of this.children) {
+      textLayout.layout();
+    }
+
+    // An empty line (e.g. a leading <br>) takes up no space.
+    if (!this.children.length) {
+      this.height = 0;
+      return;
+    }
+
+    // text-align belongs to the block container, so the whole line shares it.
+    const align = this.node.style["text-align"] as Align;
+    if (align === "center" || align === "right") {
+      const last = this.children[this.children.length - 1]!;
+      const lineWidth = last.x + last.width - this.x;
+      const shift = align === "center" ? (this.width - lineWidth) / 2 : this.width - lineWidth;
+      for (const textLayout of this.children) {
+        textLayout.x += shift;
+      }
+    }
+
+    const maxAscent = Math.max(...this.children.map((word) => word.font.ascent));
+    const baseline = this.y + LINE_HEIGHT_MULTIPLIER * maxAscent;
+    for (const word of this.children) {
+      word.y = baseline - word.font.ascent;
+    }
+    const maxDescent = Math.max(...this.children.map((word) => word.font.descent));
+    this.height = LINE_HEIGHT_MULTIPLIER * (maxAscent + maxDescent) + LINE_HEIGHT_PADDING;
+  }
 
   paint(): DrawCommand[] {
     return [];
