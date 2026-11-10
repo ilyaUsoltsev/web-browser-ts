@@ -26,7 +26,12 @@ export class Browser {
         this.activeTab?.scrolldown();
       } else if (e.key === "ArrowUp") {
         this.activeTab?.scrollup();
+      } else if (e.key === "Backspace") {
+        this.chrome.backspace();
+      } else if (e.key === "Enter") {
+        this.runAsync(this.chrome.enter().then(() => this.draw()));
       } else {
+        this.handleKey(e);
         return;
       }
       this.draw();
@@ -53,18 +58,33 @@ export class Browser {
       if (e.button !== 0) {
         return;
       }
-      // skia-canvas only pushes the canvas to screen when its native loop
-      // dispatches (OS event or animating window). Keep it animating while the
-      // async click (e.g. a network load) runs, so the result shows up without
-      // waiting for the next mouse move.
-      this.window.on("frame", this.keepAlive);
-      void this.click(e.x, e.y)
-        .catch(console.error)
-        .finally(() => {
-          // Remove on the next frame: that frame's dispatch ships the drawn canvas.
-          this.window.once("frame", () => this.window.off("frame", this.keepAlive));
-        });
+      this.runAsync(this.click(e.x, e.y));
     });
+  }
+
+  // skia-canvas only pushes the canvas to screen when its native loop
+  // dispatches (OS event or animating window). Keep it animating while async
+  // work (e.g. a network load) runs, so the result shows up without waiting
+  // for the next mouse move.
+  private runAsync(work: Promise<void>): void {
+    this.window.on("frame", this.keepAlive);
+    void work.catch(console.error).finally(() => {
+      // Remove on the next frame: that frame's dispatch ships the drawn canvas.
+      this.window.once("frame", () => this.window.off("frame", this.keepAlive));
+    });
+  }
+
+  // Only printable ASCII; skip modifier combos and special keys (arrows, F-keys).
+  private handleKey(e: { key: string; ctrlKey: boolean; metaKey: boolean; altKey: boolean }): void {
+    if (e.key.length !== 1 || e.ctrlKey || e.metaKey || e.altKey) {
+      return;
+    }
+    const code = e.key.charCodeAt(0);
+    if (!(code >= 0x20 && code < 0x7f)) {
+      return;
+    }
+    this.chrome.keypress(e.key);
+    this.draw();
   }
 
   async click(x: number, y: number): Promise<void> {

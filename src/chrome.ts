@@ -17,6 +17,8 @@ export class Chrome {
   urlbarTop: number;
   urlbarBottom: number;
   bottom: number;
+  addressBar = "";
+  focus: string | null = null;
 
   constructor(private browser: Browser) {
     this.font = getFont(20, "normal", "normal");
@@ -73,6 +75,7 @@ export class Chrome {
         "black",
       ),
     ];
+    cmds.push(new DrawLine(0, this.tabbarBottom, width, this.tabbarBottom, "black", 1));
     this.browser.tabs.forEach((tab, i) => {
       const bounds = this.tabRect(i);
       cmds.push(
@@ -100,14 +103,63 @@ export class Chrome {
     const addressRect = this.addressRect;
     cmds.push(new DrawOutline(addressRect, "black", 1));
     const url = this.browser.activeTab?.url.getUrlString() ?? "";
-    cmds.push(
-      new DrawText(addressRect.left + this.padding, addressRect.top, url, this.font, "black"),
-    );
+
+    if (this.focus === "address bar") {
+      cmds.push(
+        new DrawText(
+          addressRect.left + this.padding,
+          addressRect.top,
+          this.addressBar,
+          this.font,
+          "blue",
+        ),
+      );
+      const width = this.font.measure(this.addressBar);
+      cmds.push(
+        new DrawLine(
+          addressRect.left + this.padding + width,
+          addressRect.top,
+          addressRect.left + this.padding + width,
+          addressRect.bottom,
+          "red",
+          1,
+        ),
+      );
+    } else {
+      cmds.push(
+        new DrawText(addressRect.left + this.padding, addressRect.top, url, this.font, "black"),
+      );
+    }
+
     return cmds;
   }
 
+  keypress(char: string): void {
+    if (this.focus === "address bar") {
+      this.addressBar += char;
+    }
+  }
+
+  backspace(): void {
+    if (this.focus === "address bar") {
+      this.addressBar = this.addressBar.slice(0, -1);
+    }
+  }
+
+  async enter(): Promise<void> {
+    if (this.focus === "address bar") {
+      this.focus = null;
+      await this.browser.activeTab?.load(parseUrl(this.addressBar));
+    }
+  }
+
   async click(x: number, y: number): Promise<void> {
-    if (this.newtabRect.containsPoint(x, y)) {
+    this.focus = null;
+    if (this.addressRect.containsPoint(x, y)) {
+      this.focus = "address bar";
+      this.addressBar = "";
+      return;
+    } else if (this.newtabRect.containsPoint(x, y)) {
       await this.browser.newTab(parseUrl("https://browser.engineering/"));
       return;
     } else if (this.backRect.containsPoint(x, y)) {
