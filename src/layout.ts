@@ -8,12 +8,22 @@ import {
   DEFAULT_FONT_SIZE,
   LINE_HEIGHT_PADDING,
   LINE_HEIGHT_MULTIPLIER,
+  INPUT_WIDTH_PX,
 } from "./constants.ts";
 import { type Token, Text, Element } from "./tokens.ts";
 import { type Font, getFont } from "./fonts.ts";
 import { DrawRect, DrawText } from "./draw.ts";
 
-export type LayoutObject = DocumentLayout | BlockLayout | LineLayout | TextLayout;
+/** Font for a node's computed style. Needed both when wrapping words (BlockLayout)
+ *  and when positioning them (TextLayout/InputLayout), so it lives in one place. */
+export function fontFor(node: Token): Font {
+  const weight = node.style["font-weight"] as FontWeight;
+  const style = node.style["font-style"] as FontStyle;
+  const size = parseFloat(node.style["font-size"] ?? `${DEFAULT_FONT_SIZE}px`);
+  return getFont(size, weight, style);
+}
+
+export type LayoutObject = DocumentLayout | BlockLayout | LineLayout | TextLayout | InputLayout;
 
 export class DocumentLayout {
   node: Token;
@@ -65,6 +75,8 @@ export class BlockLayout {
   layoutMode(): "inline" | "block" {
     if (this.node instanceof Text) {
       return "inline";
+    } else if (this.node.name === "input" || this.node.name === "br") {
+      return "inline";
     } else if (
       this.node.children.some(
         (child) => child instanceof Element && BLOCK_ELEMENTS.includes(child.name),
@@ -95,7 +107,7 @@ export class BlockLayout {
         previous = next;
       }
     } else {
-      this.newLine();
+      this.newLine(); // Add a new lineLayout before starting inline layout
       this.recurse(this.node);
     }
 
@@ -119,26 +131,38 @@ export class BlockLayout {
     } else {
       if (node.name === "br") {
         this.newLine();
-      }
-      for (const child of node.children) {
-        this.recurse(child);
+      } else if (node.name === "input") {
+        this.input(node);
+      } else {
+        for (const child of node.children) {
+          this.recurse(child);
+        }
       }
     }
   }
 
-  word(word: string, node: Token): void {
-    const fontWeight = node.style["font-weight"] as FontWeight;
-    const fontStyle = node.style["font-style"] as FontStyle;
-    const size = parseFloat(node.style["font-size"] ?? `${DEFAULT_FONT_SIZE}px`);
-    const font = getFont(size, fontWeight, fontStyle);
+  input(node: Element): void {
+    const w = INPUT_WIDTH_PX;
+    if (this.cursorX + w > this.width) {
+      this.newLine();
+    }
+    const line = this.children[this.children.length - 1] as LineLayout;
+    const previousWord = line.children[line.children.length - 1] ?? null;
+    line.children.push(new InputLayout(node, line, previousWord));
+    this.cursorX += w + fontFor(node).measure(" ");
+  }
+
+  word(word: string, node: Text): void {
+    // Measure first (font comes from style, not from the not-yet-laid-out TextLayout),
+    // then wrap, and only then pick the line to append to.
+    const font = fontFor(node);
     const w = font.measure(word);
     if (this.cursorX + w > this.width) {
       this.newLine();
     }
     const line = this.children[this.children.length - 1] as LineLayout;
     const previousWord = line.children[line.children.length - 1] ?? null;
-    const text = new TextLayout(node, word, line, previousWord);
-    line.children.push(text);
+    line.children.push(new TextLayout(node, word, line, previousWord));
     this.cursorX += w + font.measure(" ");
   }
 
@@ -185,14 +209,11 @@ export class TextLayout {
     public node: Token,
     public word: string,
     public parent: LineLayout,
-    public previous: TextLayout | null,
+    public previous: TextLayout | InputLayout | null,
   ) {}
 
   layout(): void {
-    const weight = this.node.style["font-weight"] as FontWeight;
-    const style = this.node.style["font-style"] as FontStyle;
-    const size = parseFloat(this.node.style["font-size"] ?? `${DEFAULT_FONT_SIZE}px`);
-    this.font = getFont(size, weight, style);
+    this.font = fontFor(this.node);
     this.width = this.font.measure(this.word);
 
     if (this.previous) {
@@ -211,7 +232,7 @@ export class TextLayout {
 }
 
 export class LineLayout {
-  children: TextLayout[] = [];
+  children: (TextLayout | InputLayout)[] = [];
   x = 0;
   y = 0;
   width = 0;
@@ -264,5 +285,58 @@ export class LineLayout {
 
   paint(): DrawCommand[] {
     return [];
+  }
+}
+
+export class InputLayout {
+  children: never[] = [];
+  x = 0;
+  y = 0; // set by LineLayout (baseline alignment)
+  width = 0;
+  height = 0;
+  font!: Font;
+
+  constructor(
+    public node: Element,
+    public parent: LineLayout,
+    public previous: TextLayout | InputLayout | null,
+  ) {}
+
+  // Positioned like a word on the line, just with a fixed width.
+  layout(): void {
+    this.font = fontFor(this.node);
+    this.width = INPUT_WIDTH_PX;
+    if (this.previous) {
+      const space = this.previous.font.measure(" ");
+      this.x = this.previous.x + this.previous.width + space;
+    } else {
+      this.x = this.parent.x;
+    }
+    this.height = this.font.linespace;
+  }
+
+  selfRect(): Rect {
+    return new Rect(this.x, this.y, this.x + this.width, this.y + this.height);
+  }
+
+  paint(): DrawCommand[] {
+    const cmds: DrawCommand[] = [];
+    const bgColor = this.node.style["background-color"] ?? "transparent";
+    if (bgColor !== "transparent") {
+      cmds.push(new DrawRect(this.selfRect(), bgColor));
+    }
+    let text = "";
+    if (this.node.name === "input") {
+      text = this.node.attributes["value"] ?? "";
+    } else if (this.node.name === "button") {
+      if (this.node.children.length === 1 && this.node.children[0] instanceof Text) {
+        text = this.node.children[0].text;
+      } else {
+        console.log("Ignoring non-text content inside button");
+      }
+    }
+    const color = this.node.style["color"] ?? "black";
+    cmds.push(new DrawText(this.x, this.y, text, this.font, color));
+    return cmds;
   }
 }
