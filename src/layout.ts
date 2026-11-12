@@ -52,6 +52,10 @@ export class DocumentLayout {
   paint(): DrawCommand[] {
     return [];
   }
+
+  shouldPaint(): boolean {
+    return this.children.length > 0;
+  }
 }
 
 export class BlockLayout {
@@ -188,10 +192,16 @@ export class BlockLayout {
     }
     return cmds;
   }
+
+  shouldPaint() {
+    return this.node instanceof Text || (this.node.name != "input" && this.node.name != "button");
+  }
 }
 
 export function paintTree(layoutObject: LayoutObject, displayList: DrawCommand[]): void {
-  displayList.push(...layoutObject.paint());
+  if (layoutObject.shouldPaint()) {
+    displayList.push(...layoutObject.paint());
+  }
   for (const child of layoutObject.children) {
     paintTree(child, displayList);
   }
@@ -228,6 +238,10 @@ export class TextLayout {
   paint(): DrawCommand[] {
     const color = this.node.style["color"] ?? "black";
     return [new DrawText(this.x, this.y, this.word, this.font, color)];
+  }
+
+  shouldPaint(): boolean {
+    return true;
   }
 }
 
@@ -286,6 +300,10 @@ export class LineLayout {
   paint(): DrawCommand[] {
     return [];
   }
+
+  shouldPaint(): boolean {
+    return this.children.length > 0;
+  }
 }
 
 export class InputLayout {
@@ -338,5 +356,9 @@ export class InputLayout {
     const color = this.node.style["color"] ?? "black";
     cmds.push(new DrawText(this.x, this.y, text, this.font, color));
     return cmds;
+  }
+
+  shouldPaint(): boolean {
+    return true;
   }
 }
