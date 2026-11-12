@@ -50,12 +50,16 @@ export class Tab {
         clickedEl = clickedEl.parent;
         continue;
       } else if (clickedEl.name === "a" && clickedEl.attributes.href) {
-        this.js?.dispatchEvent("click", clickedEl);
+        if (this.js?.dispatchEvent("click", clickedEl)) {
+          return;
+        }
         const url = this.url.resolve(clickedEl.attributes.href);
         await this.load(url);
         return;
       } else if (clickedEl.name === "input") {
-        this.js?.dispatchEvent("click", clickedEl);
+        if (this.js?.dispatchEvent("click", clickedEl)) {
+          return;
+        }
         clickedEl.attributes["value"] = "";
         this.focus = clickedEl;
         clickedEl.isFocused = true;
@@ -66,7 +70,9 @@ export class Tab {
         // A <button> with no type is a submit button, as in real browsers.
         (clickedEl.attributes.type ?? "submit") === "submit"
       ) {
-        this.js?.dispatchEvent("click", clickedEl);
+        if (this.js?.dispatchEvent("click", clickedEl)) {
+          return;
+        }
         let ancestor: Token | null = clickedEl;
         while (ancestor instanceof Element) {
           if (ancestor.name === "form" && ancestor.attributes.action) {
@@ -84,7 +90,9 @@ export class Tab {
   }
 
   async submitForm(element: Element) {
-    this.js?.dispatchEvent("submit", element);
+    if (this.js?.dispatchEvent("submit", element)) {
+      return;
+    }
     const inputs = treeToList(element, []).filter(
       (child) =>
         child instanceof Element && child.name === "input" && Boolean(child.attributes.name),
@@ -117,7 +125,9 @@ export class Tab {
 
   backspace(): void {
     if (this.focus) {
-      this.js?.dispatchEvent("keydown", this.focus);
+      if (this.js?.dispatchEvent("keydown", this.focus)) {
+        return;
+      }
       const value = this.focus.attributes["value"] ?? "";
       this.focus.attributes["value"] = value.slice(0, -1);
       this.render();
@@ -127,7 +137,9 @@ export class Tab {
   keypress(char: string): void {
     if (this.focus) {
       // Before the value changes, like the book (and real browsers' keydown).
-      this.js?.dispatchEvent("keydown", this.focus);
+      if (this.js?.dispatchEvent("keydown", this.focus)) {
+        return;
+      }
       this.focus.attributes["value"] = (this.focus.attributes["value"] ?? "") + char;
       this.render();
     }

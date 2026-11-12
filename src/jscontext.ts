@@ -5,10 +5,21 @@ import type { Tab } from "./tab.ts";
 import { Element } from "./tokens.ts";
 import { treeToList } from "./utils.ts";
 
-// What page scripts see in place of the browser's own Element: a DOM-shaped
-// API over an element they can't reach. The book uses numeric handles because
-// DukPy can't pass Python objects to JS; node:vm can, so the wrapper holds the
-// Element directly, in a #private field page scripts can't read or change.
+class Event {
+  constructor(
+    public type: string,
+    private doDefault: boolean = true,
+  ) {}
+
+  preventDefault(): void {
+    this.doDefault = false;
+  }
+
+  get defaultPrevented(): boolean {
+    return !this.doDefault;
+  }
+}
+
 class Node {
   #element: Element;
   // Event type -> listeners. Kept on the wrapper (the book's LISTENERS table,
@@ -37,15 +48,15 @@ class Node {
   }
 
   // Runs this node's listeners for `type`, with `this` set to the node.
-  dispatchEvent(type: string): void {
-    for (const listener of this.#listeners.get(type) ?? []) {
+  dispatchEvent(evt: Event): void {
+    for (const listener of this.#listeners.get(evt.type) ?? []) {
       // Like real browsers, a crashing listener is reported and the rest
       // still run. Listeners aren't called via runInContext, so without
       // this the error would reach the browser (and no timeout applies).
       try {
-        listener.call(this);
+        listener.call(this, evt);
       } catch (e) {
-        console.log("Event listener for", type, "crashed", e);
+        console.log("Event listener for", evt.type, "crashed", e);
       }
     }
   }
@@ -100,10 +111,12 @@ export class JSContext {
   }
 
   // Called by the browser when an event happens on `element`.
-  dispatchEvent(type: string, element: Element): void {
+  dispatchEvent(type: string, element: Element): boolean {
     // No wrapper means the page never got hold of this element, so it can't
     // have added listeners to it (the book's handle -1).
-    this.wrappers.get(element)?.dispatchEvent(type);
+    const event = new Event(type);
+    this.wrappers.get(element)?.dispatchEvent(event);
+    return event.defaultPrevented;
   }
 
   run(script: string, code: string): unknown {
