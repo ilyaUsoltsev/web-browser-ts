@@ -1,3 +1,9 @@
-const els = querySelectorAll("p");
-
-els
+inputs = document.querySelectorAll('input')
+for (var i = 0; i < inputs.length; i++) {
+    var name = inputs[i].getAttribute("name");
+    var value = inputs[i].getAttribute("value");
+    
+        console.log("Input " + name + " has too much text.")
+    
+}
+inputs
