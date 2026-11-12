@@ -26,6 +26,50 @@ test("parses a custom port", () => {
   assert.equal(url.path, "/a/b?c=d");
 });
 
+test("resolves a relative path against the page's directory", () => {
+  const url = parseUrl("http://localhost:8000/guest/index.html").resolve("add");
+  assert.equal(url.scheme, "http");
+  assert.equal(url.host, "localhost");
+  assert.equal(url.port, 8000);
+  assert.equal(url.path, "/guest/add");
+});
+
+test("resolves a relative path from the root", () => {
+  const url = parseUrl("http://localhost:8000/").resolve("add");
+  assert.equal(url.port, 8000);
+  assert.equal(url.path, "/add");
+});
+
+test("resolves ../ by climbing directories, stopping at the root", () => {
+  const base = parseUrl("http://example.org/a/b/page.html");
+  assert.equal(base.resolve("../x.html").path, "/a/x.html");
+  assert.equal(base.resolve("../../../x.html").path, "/x.html");
+});
+
+test("resolves a host-relative path, keeping scheme, host and port", () => {
+  const url = parseUrl("https://localhost:8443/a/b").resolve("/c");
+  assert.equal(url.scheme, "https");
+  assert.equal(url.host, "localhost");
+  assert.equal(url.port, 8443);
+  assert.equal(url.path, "/c");
+});
+
+test("resolves a scheme-relative URL with the page's scheme", () => {
+  const url = parseUrl("https://example.org/a").resolve("//other.org:444/b");
+  assert.equal(url.scheme, "https");
+  assert.equal(url.host, "other.org");
+  assert.equal(url.port, 444);
+  assert.equal(url.path, "/b");
+});
+
+test("resolves a full URL as-is", () => {
+  const url = parseUrl("https://example.org/a").resolve("http://other.org/b");
+  assert.equal(url.scheme, "http");
+  assert.equal(url.host, "other.org");
+  assert.equal(url.port, 80);
+  assert.equal(url.path, "/b");
+});
+
 // A one-shot local server: records the request, replies with `chunks` (written
 // separately so we exercise chunk boundaries), then closes the connection.
 async function serve(chunks: Buffer[]): Promise<{ port: number; requestText: Promise<string> }> {

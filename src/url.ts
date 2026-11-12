@@ -158,11 +158,13 @@ export class URL {
     return this.strategy.request(this, options);
   }
 
-  resolve(url: string) {
+  resolve(url: string): URL {
     if (url.includes("://")) {
+      // Full URL: the scheme may differ, so let parseUrl pick a strategy.
       return parseUrl(url);
     }
     if (url.startsWith("//")) {
+      // Same scheme, new host (and maybe port): parse those out.
       return parseUrl(this.scheme + ":" + url);
     }
     if (!url.startsWith("/")) {
@@ -177,13 +179,9 @@ export class URL {
       }
       url = dir + "/" + url;
     }
-    return parseUrl(
-      this.scheme +
-        "://" +
-        this.host +
-        (this.port !== this.strategy.defaultPort ? ":" + this.port : "") +
-        url,
-    );
+    // Same scheme, host and port as this page; only the path changes, so
+    // there's nothing to parse.
+    return new URL(this.strategy, this.host, this.port, url, false);
   }
 
   getUrlString(): string {
