@@ -117,6 +117,7 @@ export class Tab {
 
   backspace(): void {
     if (this.focus) {
+      this.js?.dispatchEvent("keydown", this.focus);
       const value = this.focus.attributes["value"] ?? "";
       this.focus.attributes["value"] = value.slice(0, -1);
       this.render();

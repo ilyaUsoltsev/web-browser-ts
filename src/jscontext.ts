@@ -1,5 +1,6 @@
 import vm from "node:vm";
 import { CSSParser } from "./css-parser.ts";
+import { Parser } from "./parser.ts";
 import type { Tab } from "./tab.ts";
 import { Element } from "./tokens.ts";
 import { treeToList } from "./utils.ts";
@@ -13,9 +14,16 @@ class Node {
   // Event type -> listeners. Kept on the wrapper (the book's LISTENERS table,
   // keyed by handle) since each element always gets the same wrapper.
   #listeners = new Map<string, Function[]>();
+  // For DOM changes, which need the browser's parser and a re-render.
+  #js: JSContext;
 
-  constructor(element: Element) {
+  constructor(element: Element, js: JSContext) {
     this.#element = element;
+    this.#js = js;
+  }
+
+  set innerHTML(html: unknown) {
+    this.#js.setInnerHTML(this.#element, String(html));
   }
 
   getAttribute(name: string): string | null {
@@ -71,10 +79,24 @@ export class JSContext {
   private wrap(element: Element): Node {
     let node = this.wrappers.get(element);
     if (!node) {
-      node = new Node(element);
+      node = new Node(element, this);
       this.wrappers.set(element, node);
     }
     return node;
+  }
+
+  // Replaces element's children with `html`, parsed, and redraws the page.
+  setInnerHTML(element: Element, html: string): void {
+    // The parser only handles whole documents, so wrap the fragment in one
+    // (the book's hack; real browsers have a separate fragment algorithm).
+    const doc = new Parser("<html><body>" + html + "</body></html>").parse();
+    const body = doc?.children.find((child) => child instanceof Element && child.name === "body");
+    element.children = body?.children ?? [];
+    // They still point at the throwaway <body>.
+    for (const child of element.children) {
+      child.parent = element;
+    }
+    this.tab.render();
   }
 
   // Called by the browser when an event happens on `element`.

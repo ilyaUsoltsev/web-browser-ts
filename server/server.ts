@@ -22,6 +22,7 @@ function escapeHtml(s: string): string {
 
 function showComments(): string {
   let out = "<!doctype html>";
+  out += "<link rel=stylesheet href=/comment.css>";
   for (const entry of ENTRIES) {
     out += `<p>${escapeHtml(entry)}</p>`;
   }
@@ -29,6 +30,9 @@ function showComments(): string {
   out += "<p><input name=guest></p>";
   out += '<p><button type="submit">Sign the book!</button></p>';
   out += "</form>";
+  // Empty until comment.js writes a warning into it.
+  out += "<strong></strong>";
+  out += "<script src=/comment.js></script>";
   return out;
 }
 
@@ -58,6 +62,15 @@ app.get("/", (_req, res) => {
 
 app.post("/add", (req, res) => {
   res.send(addEntry(req.body as Record<string, string | undefined>));
+});
+
+// The page's script and style sheet, read from next to this file.
+app.get("/comment.js", (_req, res) => {
+  res.sendFile("comment.js", { root: import.meta.dirname });
+});
+
+app.get("/comment.css", (_req, res) => {
+  res.sendFile("comment.css", { root: import.meta.dirname });
 });
 
 // Anything no route matched falls through to here.
