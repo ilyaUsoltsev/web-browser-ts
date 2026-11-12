@@ -151,9 +151,12 @@ export class Tab {
         throw new Error("Failed to parse HTML");
       }
 
+      // Walk the tree once; scripts and stylesheets are both picked from it.
+      const nodes = treeToList(root, []);
+
       // Run the page's scripts before styling and layout. Inline scripts
       // (<script>code</script>) aren't supported, only <script src=...>.
-      const scripts = treeToList(root, []).flatMap((child) =>
+      const scripts = nodes.flatMap((child) =>
         child instanceof Element && child.name === "script" && child.attributes.src
           ? [child.attributes.src]
           : [],
@@ -173,14 +176,14 @@ export class Tab {
       }
 
       // read all css links
-      const links = treeToList(root, []).flatMap((child) =>
+      const links = nodes.flatMap((child) =>
         child instanceof Element &&
         child.name === "link" &&
         child.attributes.rel === "stylesheet" &&
-        Boolean(child.attributes.href)
+        child.attributes.href
           ? [child.attributes.href]
           : [],
-      ) as string[];
+      );
 
       const rules = [...DEFAULT_STYLE_SHEET];
 
