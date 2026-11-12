@@ -46,23 +46,51 @@ export class Tab {
       if (clickedEl instanceof Text) {
         clickedEl = clickedEl.parent;
         continue;
-      } else if (
-        clickedEl instanceof Element &&
-        clickedEl.name === "a" &&
-        clickedEl.attributes.href
-      ) {
+      } else if (clickedEl.name === "a" && clickedEl.attributes.href) {
         const url = this.url.resolve(clickedEl.attributes.href);
         await this.load(url);
         return;
-      } else if (clickedEl instanceof Element && clickedEl.name === "input") {
+      } else if (clickedEl.name === "input") {
         clickedEl.attributes["value"] = "";
         this.focus = clickedEl;
         clickedEl.isFocused = true;
         this.render();
         return;
+      } else if (clickedEl.name === "button" && clickedEl.attributes.type === "submit") {
+        let ancestor: Token | null = clickedEl;
+        while (ancestor instanceof Element) {
+          if (ancestor.name === "form" && ancestor.attributes.action) {
+            await this.submitForm(ancestor);
+            return;
+          }
+          ancestor = ancestor.parent;
+        }
+        // A button outside a submittable form does nothing.
+        return;
       }
+
       clickedEl = clickedEl.parent;
     }
+  }
+
+  async submitForm(element: Element) {
+    const inputs = treeToList(element, []).filter(
+      (child) =>
+        child instanceof Element && child.name === "input" && Boolean(child.attributes.name),
+    ) as Element[];
+    let body = "";
+    for (const input of inputs) {
+      const name = input.attributes.name!;
+      const value = input.attributes.value ?? "";
+      body += encodeURIComponent(name) + "=" + encodeURIComponent(value) + "&";
+    }
+    body = body.slice(0, -1); // Remove the trailing '&'
+    const actionUrl = this.url.resolve(element.attributes.action!);
+
+    await this.load(actionUrl, {
+      method: "POST",
+      body,
+    });
   }
 
   blur(): void {
@@ -98,12 +126,12 @@ export class Tab {
     await this.load(url);
   }
 
-  async load(url: URL): Promise<void> {
+  async load(url: URL, options?: { method?: string; body?: string }): Promise<void> {
     this.history.push(url);
     this.url = url;
     this.scroll = 0;
     this.focus = null;
-    const body = await url.request();
+    const body = await url.request(options);
     if (url.skipParsing) {
       // this.layout = layout(body, this.width);
     } else {

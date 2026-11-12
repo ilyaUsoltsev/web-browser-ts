@@ -15,7 +15,7 @@ interface SchemeStrategy {
   // Returns the part of the url after the scheme prefix, or undefined if
   // this strategy doesn't own that prefix.
   match(url: string): string | undefined;
-  request(url: URL): Promise<string>;
+  request(url: URL, options?: { method?: string; body?: string }): Promise<string>;
 }
 
 function matchSchemePrefix(url: string, scheme: string): string | undefined {
@@ -25,10 +25,19 @@ function matchSchemePrefix(url: string, scheme: string): string | undefined {
 
 // tls.connect plays the role of ssl's ctx.wrap_socket(s, server_hostname=host).
 // `servername` sets SNI, which servers hosting many sites need.
-async function networkRequest(url: URL, secure: boolean): ReturnType<SchemeStrategy["request"]> {
-  const cachedResponse = responseCache.get(url.host + url.path);
-  if (cachedResponse) {
-    return Promise.resolve(cachedResponse);
+async function networkRequest(
+  url: URL,
+  secure: boolean,
+  options?: { method?: string; body?: string },
+): ReturnType<SchemeStrategy["request"]> {
+  const method = options?.method ?? "GET";
+  // Only GET responses are cacheable; a POST must always reach the server.
+  const cacheable = method === "GET";
+  if (cacheable) {
+    const cachedResponse = responseCache.get(url.host + url.path);
+    if (cachedResponse) {
+      return cachedResponse;
+    }
   }
 
   const socket = Socket.get(secure, url.host, url.port);
@@ -36,11 +45,17 @@ async function networkRequest(url: URL, secure: boolean): ReturnType<SchemeStrat
   // Attach listeners before writing so no data or error event can be missed.
   const received = socket.readAll();
 
-  let request = `GET ${url.path} HTTP/1.1\r\n`;
+  let request = `${method} ${url.path} HTTP/1.1\r\n`;
   request += `Connection: close\r\n`;
   request += `User-Agent: web-browser-ts/1.0\r\n`;
   request += `Host: ${url.host}\r\n`;
+  if (options?.body !== undefined) {
+    request += `Content-Type: application/x-www-form-urlencoded\r\n`;
+    request += `Content-Length: ${Buffer.byteLength(options.body)}\r\n`;
+  }
   request += "\r\n";
+  request += options?.body ?? "";
+
   socket.write(request, "utf8"); // Node buffers this until the connection is up
 
   const response = (await received).toString("utf8");
@@ -69,7 +84,9 @@ async function networkRequest(url: URL, secure: boolean): ReturnType<SchemeStrat
 
   socket.destroy(url.host);
 
-  responseCache.set(url.host + url.path, body);
+  if (cacheable) {
+    responseCache.set(url.host + url.path, body);
+  }
 
   return body;
 }
@@ -89,13 +106,13 @@ const SCHEMES: SchemeStrategy[] = [
     name: "http",
     defaultPort: 80,
     match: (url) => matchSchemePrefix(url, "http"),
-    request: (url) => networkRequest(url, false),
+    request: (url, options) => networkRequest(url, false, options),
   },
   {
     name: "https",
     defaultPort: 443,
     match: (url) => matchSchemePrefix(url, "https"),
-    request: (url) => networkRequest(url, true),
+    request: (url, options) => networkRequest(url, true, options),
   },
   {
     name: "file",
@@ -137,8 +154,8 @@ export class URL {
   }
 
   // async because socket I/O in Node can't block; callers must await it.
-  async request(): Promise<string> {
-    return this.strategy.request(this);
+  async request(options?: { method?: string; body?: string }): Promise<string> {
+    return this.strategy.request(this, options);
   }
 
   resolve(url: string) {
