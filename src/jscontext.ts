@@ -10,6 +10,9 @@ import { treeToList } from "./utils.ts";
 // Element directly, in a #private field page scripts can't read or change.
 class Node {
   #element: Element;
+  // Event type -> listeners. Kept on the wrapper (the book's LISTENERS table,
+  // keyed by handle) since each element always gets the same wrapper.
+  #listeners = new Map<string, Function[]>();
 
   constructor(element: Element) {
     this.#element = element;
@@ -17,6 +20,26 @@ class Node {
 
   getAttribute(name: string): string | null {
     return this.#element.attributes[name] ?? null;
+  }
+
+  addEventListener(type: string, listener: Function): void {
+    const list = this.#listeners.get(type) ?? [];
+    list.push(listener);
+    this.#listeners.set(type, list);
+  }
+
+  // Runs this node's listeners for `type`, with `this` set to the node.
+  dispatchEvent(type: string): void {
+    for (const listener of this.#listeners.get(type) ?? []) {
+      // Like real browsers, a crashing listener is reported and the rest
+      // still run. Listeners aren't called via runInContext, so without
+      // this the error would reach the browser (and no timeout applies).
+      try {
+        listener.call(this);
+      } catch (e) {
+        console.log("Event listener for", type, "crashed", e);
+      }
+    }
   }
 }
 
@@ -52,6 +75,13 @@ export class JSContext {
       this.wrappers.set(element, node);
     }
     return node;
+  }
+
+  // Called by the browser when an event happens on `element`.
+  dispatchEvent(type: string, element: Element): void {
+    // No wrapper means the page never got hold of this element, so it can't
+    // have added listeners to it (the book's handle -1).
+    this.wrappers.get(element)?.dispatchEvent(type);
   }
 
   run(script: string, code: string): unknown {

@@ -1,9 +1,11 @@
-inputs = document.querySelectorAll('input')
-for (var i = 0; i < inputs.length; i++) {
-    var name = inputs[i].getAttribute("name");
-    var value = inputs[i].getAttribute("value");
-    
-        console.log("Input " + name + " has too much text.")
-    
+function lengthCheck() {
+  var name = this.getAttribute("name");
+  var value = this.getAttribute("value");
+  if (value.length > 1) {
+    console.log("Input " + name + " has too much text: " + value);
+  }
 }
-inputs
+var inputs = document.querySelectorAll("input");
+for (var i = 0; i < inputs.length; i++) {
+  inputs[i].addEventListener("keydown", lengthCheck);
+}
