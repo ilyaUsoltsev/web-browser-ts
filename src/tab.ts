@@ -136,6 +136,7 @@ export class Tab {
   }
 
   async load(url: URL, options?: { method?: string; body?: string }): Promise<void> {
+    this.js = new JSContext(this);
     this.history.push(url);
     this.url = url;
     this.scroll = 0;
@@ -150,6 +151,9 @@ export class Tab {
       if (!root) {
         throw new Error("Failed to parse HTML");
       }
+      // Set before scripts run: their DOM calls (querySelectorAll) read this
+      // tree, which would otherwise still be the previous page's.
+      this.rootElement = root;
 
       // Walk the tree once; scripts and stylesheets are both picked from it.
       const nodes = treeToList(root, []);
@@ -162,7 +166,6 @@ export class Tab {
           : [],
       );
 
-      this.js = new JSContext();
       for (const script of scripts) {
         const scriptUrl = url.resolve(script);
         let code: string;
@@ -198,7 +201,6 @@ export class Tab {
       }
 
       // Style sheets are downloaded once per load, not on every render.
-      this.rootElement = root;
       this.rules = rules.sort((a, b) => cascadePriority(a) - cascadePriority(b));
       this.render();
     }
