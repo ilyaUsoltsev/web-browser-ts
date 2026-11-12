@@ -85,7 +85,9 @@ export class Tab {
       body += encodeURIComponent(name) + "=" + encodeURIComponent(value) + "&";
     }
     body = body.slice(0, -1); // Remove the trailing '&'
-    const actionUrl = this.url.resolve(element.attributes.action!);
+    // A form without an action submits to the page it's on, like real browsers.
+    const action = element.attributes.action;
+    const actionUrl = action ? this.url.resolve(action) : this.url;
 
     await this.load(actionUrl, {
       method: "POST",

@@ -3,7 +3,8 @@
 // The book writes this server by hand on a raw socket. Express does that part
 // for us: it accepts connections, parses the request line, headers, and the
 // Content-Length body, and writes the status line and Content-Length back.
-// What's left is the book's do_request(): turning a request into a page.
+// What's left is the book's do_request(): routing a request to a function
+// that builds the page.
 //
 //   npm run server     start on http://localhost:8000/
 
@@ -31,28 +32,37 @@ function showComments(): string {
   return out;
 }
 
+function addEntry(params: Record<string, string | undefined>): string {
+  if (params.guest) {
+    ENTRIES.push(params.guest);
+  }
+  return showComments();
+}
+
+function notFound(url: string, method: string): string {
+  return `<!doctype html><h1>${escapeHtml(method)} ${escapeHtml(url)} not found!</h1>`;
+}
+
 const app = express();
 
 // Parses `application/x-www-form-urlencoded` bodies (what our browser's
-// submitForm sends) into req.body — the book's form_decode().
+// submitForm sends) into req.body — the book's form_decode(), including
+// unquote_plus's "+" -> " " handling.
 app.use(express.urlencoded({ extended: false }));
 
+// These routes are the book's do_request(): pick a handler by method and URL.
+// res.send() defaults to "200 OK".
 app.get("/", (_req, res) => {
   res.send(showComments());
 });
 
 app.post("/add", (req, res) => {
-  const guest = (req.body as Record<string, string | undefined>).guest;
-  if (guest) {
-    ENTRIES.push(guest);
-  }
-  res.send(showComments());
+  res.send(addEntry(req.body as Record<string, string | undefined>));
 });
 
+// Anything no route matched falls through to here.
 app.use((req, res) => {
-  res
-    .status(404)
-    .send(`<!doctype html><h1>${escapeHtml(req.method)} ${escapeHtml(req.path)} not found!</h1>`);
+  res.status(404).send(notFound(req.path, req.method));
 });
 
 app.listen(PORT, () => {
