@@ -15,3 +15,5 @@ export interface DrawCommand {
 }
 
 export type Rule = { selector: Selector; body: Record<string, string> };
+
+export type KeyDownEvent = { key: string; ctrlKey: boolean; metaKey: boolean; altKey: boolean };

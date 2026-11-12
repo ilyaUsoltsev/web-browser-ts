@@ -3,12 +3,15 @@ import { Window } from "skia-canvas";
 import { WIDTH, HEIGHT, SCROLL_STEP } from "./constants.ts";
 import { Tab } from "./tab.ts";
 import type { URL } from "./url.ts";
+import type { KeyDownEvent } from "./types.ts";
 
 export class Browser {
   window!: Window;
   tabs: Tab[] = [];
   activeTab: Tab | null = null;
   chrome = new Chrome(this);
+  // Where key presses go: the chrome's address bar, the active tab, or nowhere.
+  focus: "address bar" | "content" | null = null;
   private keepAlive = (): void => {};
 
   // Create and draw in the same tick so skia-canvas displays the first frame.
@@ -27,9 +30,18 @@ export class Browser {
       } else if (e.key === "ArrowUp") {
         this.activeTab?.scrollup();
       } else if (e.key === "Backspace") {
-        this.chrome.backspace();
+        if (this.focus === "address bar") {
+          this.chrome.backspace();
+        }
+        if (this.focus === "content" && this.activeTab) {
+          this.activeTab.backspace();
+        }
       } else if (e.key === "Enter") {
-        this.runAsync(this.chrome.enter().then(() => this.draw()));
+        if (this.focus === "address bar") {
+          this.runAsync(this.chrome.enter().then(() => this.draw()));
+        } else if (this.focus === "content") {
+          this.activeTab?.blur();
+        }
       } else {
         this.handleKey(e);
         return;
@@ -75,15 +87,23 @@ export class Browser {
   }
 
   // Only printable ASCII; skip modifier combos and special keys (arrows, F-keys).
-  private handleKey(e: { key: string; ctrlKey: boolean; metaKey: boolean; altKey: boolean }): void {
-    if (e.key.length !== 1 || e.ctrlKey || e.metaKey || e.altKey) {
+  private handleKey(e: KeyDownEvent): void {
+    // winit reports the space bar as the named key "Space", not " ".
+    const key = e.key === "Space" ? " " : e.key;
+    if (key.length !== 1 || e.ctrlKey || e.metaKey || e.altKey) {
       return;
     }
-    const code = e.key.charCodeAt(0);
+    const code = key.charCodeAt(0);
     if (!(code >= 0x20 && code < 0x7f)) {
       return;
     }
-    this.chrome.keypress(e.key);
+    if (this.focus === "address bar") {
+      this.chrome.keypress(key);
+    } else if (this.focus === "content") {
+      this.activeTab?.keypress(key);
+    } else {
+      return;
+    }
     this.draw();
   }
 
@@ -91,6 +111,7 @@ export class Browser {
     if (y < this.chrome.bottom) {
       await this.chrome.click(x, y);
     } else {
+      this.focus = "content";
       await this.activeTab?.click(x, y - this.chrome.bottom);
     }
     this.draw();

@@ -4,11 +4,11 @@ import { Canvas, type Window } from "skia-canvas";
 import { Browser } from "../src/browser.ts";
 import { Tab } from "../src/tab.ts";
 import { parseUrl } from "../src/url.ts";
-import { DrawText } from "../src/draw.ts";
+import { DrawLine, DrawText } from "../src/draw.ts";
 import { Rect } from "../src/rect.ts";
 import { treeToList } from "../src/utils.ts";
-import { Text } from "../src/tokens.ts";
-import type { LayoutObject } from "../src/layout.ts";
+import { Element, Text } from "../src/tokens.ts";
+import { InputLayout, type LayoutObject } from "../src/layout.ts";
 
 function page(html: string) {
   const url = parseUrl("file:///test/page.html");
@@ -139,4 +139,49 @@ test("tab drawing offsets page commands and culls outside its viewport", () => {
   tab.draw(canvas.getContext("2d"), 35);
   assert.deepEqual(scrolls, [-15]);
   assert.equal(tab.scrollbarHeight, 100 / 3);
+});
+
+test("clicking an input clears and focuses it, and key presses edit its value", async () => {
+  const browser = new Browser();
+  const canvas = new Canvas(400, 300);
+  browser.window = { width: 400, height: 300, ctx: canvas.getContext("2d") } as Window;
+  await browser.newTab(page('<p>name <input value="old"></p>'));
+  const tab = browser.activeTab!;
+  const findInput = () =>
+    treeToList<LayoutObject>(tab.document, []).find((obj) => obj instanceof InputLayout)!;
+  const input = findInput();
+
+  await browser.click(input.x + 1, input.y + 1 + browser.chrome.bottom);
+  assert.equal(browser.focus, "content");
+  assert.equal(tab.focus, input.node);
+  assert.equal(input.node.attributes["value"], "");
+
+  tab.keypress("h");
+  tab.keypress("i");
+  assert.equal(input.node.attributes["value"], "hi");
+  // Rerendered: the new layout tree paints the typed text plus a cursor line.
+  assert.ok(tab.displayList.some((cmd) => cmd instanceof DrawText && cmd.text === "hi"));
+  assert.ok(tab.displayList.some((cmd) => cmd instanceof DrawLine));
+
+  // Blurring (e.g. on Enter) unfocuses the input but keeps its value.
+  tab.blur();
+  assert.equal(tab.focus, null);
+  assert.equal((input.node as Element).isFocused, false);
+  assert.equal(input.node.attributes["value"], "hi");
+  assert.ok(!tab.displayList.some((cmd) => cmd instanceof DrawLine));
+
+  // Refocus, then clicking elsewhere on the page unfocuses the input and removes its cursor.
+  await browser.click(input.x + 1, input.y + 1 + browser.chrome.bottom);
+  tab.keypress("h");
+  tab.keypress("i");
+  await browser.click(390, 290);
+  assert.equal(tab.focus, null);
+  assert.equal((input.node as Element).isFocused, false);
+  assert.ok(!tab.displayList.some((cmd) => cmd instanceof DrawLine));
+  tab.keypress("x");
+  assert.equal(input.node.attributes["value"], "hi");
+
+  // Clicking the chrome takes focus away from the page.
+  await browser.click(1, browser.chrome.bottom - 1);
+  assert.equal(browser.focus, null);
 });

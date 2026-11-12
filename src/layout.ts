@@ -12,7 +12,7 @@ import {
 } from "./constants.ts";
 import { type Token, Text, Element } from "./tokens.ts";
 import { type Font, getFont } from "./fonts.ts";
-import { DrawRect, DrawText } from "./draw.ts";
+import { DrawLine, DrawRect, DrawText } from "./draw.ts";
 
 /** Font for a node's computed style. Needed both when wrapping words (BlockLayout)
  *  and when positioning them (TextLayout/InputLayout), so it lives in one place. */
@@ -355,6 +355,10 @@ export class InputLayout {
     }
     const color = this.node.style["color"] ?? "black";
     cmds.push(new DrawText(this.x, this.y, text, this.font, color));
+    if (this.node.isFocused) {
+      const cx = this.x + this.font.measure(text);
+      cmds.push(new DrawLine(cx, this.y, cx, this.y + this.height, "black", 1));
+    }
     return cmds;
   }
 

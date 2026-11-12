@@ -5,6 +5,8 @@ export class Text {
   children: Token[] = [];
   parent: Token | null = null;
   style: Record<string, string> = {};
+  // Text is never focused; kept so Text and Element share the same fields.
+  isFocused = false;
   constructor(text: string, parent: Token | null = null, children: Token[] = []) {
     this.text = text;
     this.children = children;
@@ -26,6 +28,7 @@ export class Element {
   children: Token[] = [];
   parent: Token | null = null;
   style: Record<string, string> = {};
+  isFocused = false;
   constructor(
     name: string,
     attributes: Record<string, null | string> = {},

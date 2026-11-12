@@ -8,7 +8,7 @@ import { Element, type Token } from "./tokens.ts";
 import { WIDTH, HSTEP, VSTEP, HEIGHT, SCROLL_STEP } from "./constants.ts";
 import { DocumentLayout, paintTree } from "./layout.ts";
 import { Text } from "./tokens.ts";
-import type { DrawCommand } from "./types.ts";
+import type { DrawCommand, Rule } from "./types.ts";
 import { cascadePriority } from "./utils.ts";
 
 export class Tab {
@@ -20,6 +20,10 @@ export class Tab {
   scrollbarY = 0;
   url!: URL;
   history: URL[] = [];
+  nodes: Element | null = null;
+  rules: Rule[] = [];
+  // The text entry (if any) that receives key presses sent to this tab.
+  focus: Element | null = null;
 
   constructor(
     public width = WIDTH,
@@ -30,14 +34,12 @@ export class Tab {
     if (!this.document) {
       return;
     }
-    // Handle click events here
+    // Clicking anywhere unfocuses the current text entry, lest it keep drawing its cursor.
+    this.blur();
     y += this.scroll;
     const objects = treeToList<LayoutObject>(this.document, []).filter(
       (obj) => x >= obj.x && x <= obj.x + obj.width && y >= obj.y && y <= obj.y + obj.height,
     );
-    if (objects.length === 0) {
-      return;
-    }
 
     let clickedEl: Token | undefined | null = objects[objects.length - 1]?.node;
     while (clickedEl) {
@@ -52,8 +54,38 @@ export class Tab {
         const url = this.url.resolve(clickedEl.attributes.href);
         await this.load(url);
         return;
+      } else if (clickedEl instanceof Element && clickedEl.name === "input") {
+        clickedEl.attributes["value"] = "";
+        this.focus = clickedEl;
+        clickedEl.isFocused = true;
+        this.render();
+        return;
       }
       clickedEl = clickedEl.parent;
+    }
+  }
+
+  blur(): void {
+    if (this.focus) {
+      this.focus.isFocused = false;
+      this.focus = null;
+      // Repaint without the cursor.
+      this.render();
+    }
+  }
+
+  backspace(): void {
+    if (this.focus) {
+      const value = this.focus.attributes["value"] ?? "";
+      this.focus.attributes["value"] = value.slice(0, -1);
+      this.render();
+    }
+  }
+
+  keypress(char: string): void {
+    if (this.focus) {
+      this.focus.attributes["value"] = (this.focus.attributes["value"] ?? "") + char;
+      this.render();
     }
   }
 
@@ -70,6 +102,7 @@ export class Tab {
     this.history.push(url);
     this.url = url;
     this.scroll = 0;
+    this.focus = null;
     const body = await url.request();
     if (url.skipParsing) {
       // this.layout = layout(body, this.width);
@@ -103,14 +136,21 @@ export class Tab {
         }
       }
 
-      style(
-        root,
-        rules.sort((a, b) => cascadePriority(a) - cascadePriority(b)),
-      );
-
-      this.document = new DocumentLayout(root);
-      this.layout();
+      // Style sheets are downloaded once per load, not on every render.
+      this.nodes = root;
+      this.rules = rules.sort((a, b) => cascadePriority(a) - cascadePriority(b));
+      this.render();
     }
+  }
+
+  // Style, layout and paint: rerun whenever the page's HTML tree changes.
+  render(): void {
+    if (!this.nodes) {
+      return;
+    }
+    style(this.nodes, this.rules);
+    this.document = new DocumentLayout(this.nodes);
+    this.layout();
   }
 
   layout(): void {

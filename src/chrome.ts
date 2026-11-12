@@ -18,7 +18,6 @@ export class Chrome {
   urlbarBottom: number;
   bottom: number;
   addressBar = "";
-  focus: string | null = null;
 
   constructor(private browser: Browser) {
     this.font = getFont(20, "normal", "normal");
@@ -104,7 +103,7 @@ export class Chrome {
     cmds.push(new DrawOutline(addressRect, "black", 1));
     const url = this.browser.activeTab?.url.getUrlString() ?? "";
 
-    if (this.focus === "address bar") {
+    if (this.browser.focus === "address bar") {
       cmds.push(
         new DrawText(
           addressRect.left + this.padding,
@@ -135,28 +134,22 @@ export class Chrome {
   }
 
   keypress(char: string): void {
-    if (this.focus === "address bar") {
-      this.addressBar += char;
-    }
+    this.addressBar += char;
   }
 
   backspace(): void {
-    if (this.focus === "address bar") {
-      this.addressBar = this.addressBar.slice(0, -1);
-    }
+    this.addressBar = this.addressBar.slice(0, -1);
   }
 
   async enter(): Promise<void> {
-    if (this.focus === "address bar") {
-      this.focus = null;
-      await this.browser.activeTab?.load(parseUrl(this.addressBar));
-    }
+    this.browser.focus = null;
+    await this.browser.activeTab?.load(parseUrl(this.addressBar));
   }
 
   async click(x: number, y: number): Promise<void> {
-    this.focus = null;
+    this.browser.focus = null;
     if (this.addressRect.containsPoint(x, y)) {
-      this.focus = "address bar";
+      this.browser.focus = "address bar";
       this.addressBar = "";
       return;
     } else if (this.newtabRect.containsPoint(x, y)) {
