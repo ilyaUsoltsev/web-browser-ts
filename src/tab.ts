@@ -10,6 +10,7 @@ import { DocumentLayout, paintTree } from "./layout.ts";
 import { Text } from "./tokens.ts";
 import type { DrawCommand, Rule } from "./types.ts";
 import { cascadePriority } from "./utils.ts";
+import { JSContext } from "./jscontext.ts";
 
 export class Tab {
   displayList: DrawCommand[] = [];
@@ -20,10 +21,12 @@ export class Tab {
   scrollbarY = 0;
   url!: URL;
   history: URL[] = [];
-  nodes: Element | null = null;
+  rootElement: Element | null = null;
   rules: Rule[] = [];
   // The text entry (if any) that receives key presses sent to this tab.
   focus: Element | null = null;
+  // The current page's JS environment; a new page gets a fresh one.
+  js: JSContext | null = null;
 
   constructor(
     public width = WIDTH,
@@ -148,6 +151,27 @@ export class Tab {
         throw new Error("Failed to parse HTML");
       }
 
+      // Run the page's scripts before styling and layout. Inline scripts
+      // (<script>code</script>) aren't supported, only <script src=...>.
+      const scripts = treeToList(root, []).flatMap((child) =>
+        child instanceof Element && child.name === "script" && child.attributes.src
+          ? [child.attributes.src]
+          : [],
+      );
+
+      this.js = new JSContext();
+      for (const script of scripts) {
+        const scriptUrl = url.resolve(script);
+        let code: string;
+        try {
+          code = await scriptUrl.request();
+        } catch {
+          // Like a missing stylesheet, a missing script shouldn't stop the page.
+          continue;
+        }
+        console.log("Script returned: ", this.js.run(script, code));
+      }
+
       // read all css links
       const links = treeToList(root, []).flatMap((child) =>
         child instanceof Element &&
@@ -171,7 +195,7 @@ export class Tab {
       }
 
       // Style sheets are downloaded once per load, not on every render.
-      this.nodes = root;
+      this.rootElement = root;
       this.rules = rules.sort((a, b) => cascadePriority(a) - cascadePriority(b));
       this.render();
     }
@@ -179,11 +203,11 @@ export class Tab {
 
   // Style, layout and paint: rerun whenever the page's HTML tree changes.
   render(): void {
-    if (!this.nodes) {
+    if (!this.rootElement) {
       return;
     }
-    style(this.nodes, this.rules);
-    this.document = new DocumentLayout(this.nodes);
+    style(this.rootElement, this.rules);
+    this.document = new DocumentLayout(this.rootElement);
     this.layout();
   }
 
