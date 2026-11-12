@@ -79,7 +79,11 @@ export class BlockLayout {
   layoutMode(): "inline" | "block" {
     if (this.node instanceof Text) {
       return "inline";
-    } else if (this.node.name === "input" || this.node.name === "br") {
+    } else if (
+      this.node.name === "input" ||
+      this.node.name === "button" ||
+      this.node.name === "br"
+    ) {
       return "inline";
     } else if (
       this.node.children.some(
@@ -135,7 +139,7 @@ export class BlockLayout {
     } else {
       if (node.name === "br") {
         this.newLine();
-      } else if (node.name === "input") {
+      } else if (node.name === "input" || node.name === "button") {
         this.input(node);
       } else {
         for (const child of node.children) {
