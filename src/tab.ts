@@ -56,7 +56,11 @@ export class Tab {
         clickedEl.isFocused = true;
         this.render();
         return;
-      } else if (clickedEl.name === "button" && clickedEl.attributes.type === "submit") {
+      } else if (
+        clickedEl.name === "button" &&
+        // A <button> with no type is a submit button, as in real browsers.
+        (clickedEl.attributes.type ?? "submit") === "submit"
+      ) {
         let ancestor: Token | null = clickedEl;
         while (ancestor instanceof Element) {
           if (ancestor.name === "form" && ancestor.attributes.action) {
