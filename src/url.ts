@@ -10,13 +10,20 @@ function split1(s: string, sep: string): [string, string] {
   return [s.slice(0, i), s.slice(i + sep.length)];
 }
 
+interface RequestOptions {
+  method?: string;
+  body?: string;
+  // Only script fetches set this; navigation and subresources remain unrestricted.
+  requiredOrigin?: string;
+}
+
 interface SchemeStrategy {
   readonly name: string;
   readonly defaultPort: number;
   // Returns the part of the url after the scheme prefix, or undefined if
   // this strategy doesn't own that prefix.
   match(url: string): string | undefined;
-  request(url: URL, options?: { method?: string; body?: string }): Promise<string>;
+  request(url: URL, options?: RequestOptions): Promise<string>;
 }
 
 function matchSchemePrefix(url: string, scheme: string): string | undefined {
@@ -29,14 +36,14 @@ function matchSchemePrefix(url: string, scheme: string): string | undefined {
 async function networkRequest(
   url: URL,
   secure: boolean,
-  options?: { method?: string; body?: string },
+  options?: RequestOptions,
 ): ReturnType<SchemeStrategy["request"]> {
   const method = options?.method ?? "GET";
   // Only GET responses are cacheable; a POST must always reach the server.
   const cookie = COOKIE_JAR.get(url.host);
   const cacheable = method === "GET" && cookie === undefined;
   if (cacheable) {
-    const cachedResponse = responseCache.get(url.host + url.path);
+    const cachedResponse = responseCache.get(url.origin() + url.path);
     if (cachedResponse) {
       return cachedResponse;
     }
@@ -90,13 +97,13 @@ async function networkRequest(
   if (responseHeaders.has("location")) {
     const location = responseHeaders.get("location")!;
     socket.destroy(url.host);
-    return url.resolve(location).request();
+    return url.resolve(location).request({ requiredOrigin: options?.requiredOrigin });
   }
 
   socket.destroy(url.host);
 
   if (cacheable && setCookie === undefined) {
-    responseCache.set(url.host + url.path, body);
+    responseCache.set(url.origin() + url.path, body);
   }
 
   return body;
@@ -159,13 +166,21 @@ export class URL {
     return this.strategy.name;
   }
 
+  origin(): string {
+    return `${this.scheme}://${this.host.toLowerCase()}:${this.port}`;
+  }
+
   async openFile(): Promise<string> {
     const fs = await import("fs/promises");
     return await fs.readFile(this.path, "utf8");
   }
 
   // async because socket I/O in Node can't block; callers must await it.
-  async request(options?: { method?: string; body?: string }): Promise<string> {
+  async request(options?: RequestOptions): Promise<string> {
+    // Check before cache access or network I/O, including each redirect hop.
+    if (options?.requiredOrigin !== undefined && this.origin() !== options.requiredOrigin) {
+      throw new TypeError("Cross-origin fetch request not allowed");
+    }
     return this.strategy.request(this, options);
   }
 

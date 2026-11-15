@@ -5,6 +5,13 @@ import type { AddressInfo } from "node:net";
 import { parseUrl, show } from "../src/url.ts";
 import { COOKIE_JAR } from "../src/cookie-jar.ts";
 
+test("origins compare scheme, case-insensitive hostname, and effective port", () => {
+  assert.equal(parseUrl("http://EXAMPLE.org/a").origin(), parseUrl("http://example.org:80/b").origin());
+  assert.notEqual(parseUrl("https://example.org/").origin(), parseUrl("http://example.org/").origin());
+  assert.notEqual(parseUrl("http://example.org:8000/").origin(), parseUrl("http://example.org:8001/").origin());
+  assert.notEqual(parseUrl("http://other.org/").origin(), parseUrl("http://example.org/").origin());
+});
+
 test("parses an http URL with default port", () => {
   const url = parseUrl("http://example.org/index.html");
   assert.equal(url.scheme, "http");

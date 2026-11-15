@@ -86,7 +86,7 @@ export class JSContext {
         if ((method === "GET" || method === "HEAD") && body !== undefined) {
           throw new TypeError("GET and HEAD requests cannot have a body");
         }
-        const out = await url.request({ method, body });
+        const out = await url.request({ method, body, requiredOrigin: this.tab.url.origin() });
         let bodyUsed = false;
         const read = () => {
           if (bodyUsed) {

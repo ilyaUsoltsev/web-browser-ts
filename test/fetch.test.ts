@@ -7,6 +7,48 @@ import { JSContext } from "../src/jscontext.ts";
 import { parseUrl } from "../src/url.ts";
 import { COOKIE_JAR } from "../src/cookie-jar.ts";
 
+test("fetch rejects different origins and cross-origin redirects before sending requests", async () => {
+  let foreignRequests = 0;
+  const foreign = http.createServer((_req, res) => {
+    foreignRequests++;
+    res.end("private data");
+  });
+  await new Promise<void>(resolve => foreign.listen(0, "127.0.0.1", resolve));
+  const foreignUrl = `http://127.0.0.1:${(foreign.address() as AddressInfo).port}/private`;
+  const local = http.createServer((req, res) => {
+    if (req.url === "/redirect") {
+      res.writeHead(302, { Location: foreignUrl });
+    } else if (req.url === "/relative") {
+      res.writeHead(302, { Location: "/ok" });
+    }
+    res.end("allowed");
+  });
+  await new Promise<void>(resolve => local.listen(0, "127.0.0.1", resolve));
+  try {
+    const tab = new Tab();
+    const base = `http://127.0.0.1:${(local.address() as AddressInfo).port}`;
+    tab.url = parseUrl(base + "/page");
+    const js = new JSContext(tab);
+    const blocked = [foreignUrl, base.replace("http:", "https:") + "/private",
+      base.replace("127.0.0.1", "localhost") + "/private", base + "/redirect"];
+    for (const url of blocked) {
+      await assert.rejects(js.run("blocked-fetch", `fetch(${JSON.stringify(url)})`) as Promise<unknown>,
+        /Cross-origin fetch request not allowed/);
+    }
+    assert.equal(foreignRequests, 0);
+    assert.equal(await js.run("allowed-redirect", `fetch("/relative").then(r => r.text())`), "allowed");
+    // Navigation still follows cross-origin redirects.
+    assert.equal(await parseUrl(base + "/redirect").request(), "private data");
+    assert.equal(foreignRequests, 1);
+    // A cached response from navigation cannot bypass the fetch policy.
+    await assert.rejects(js.run("cached-cross-origin", `fetch(${JSON.stringify(foreignUrl)})`) as Promise<unknown>,
+      /Cross-origin fetch request not allowed/);
+  } finally {
+    await Promise.all([local, foreign].map(server => new Promise<void>((resolve, reject) =>
+      server.close(error => error ? reject(error) : resolve()))));
+  }
+});
+
 test("fetch is asynchronous, resolves URLs, and shares cookies for GET and POST", async () => {
   const server = http.createServer((req, res) => {
     let body = "";
