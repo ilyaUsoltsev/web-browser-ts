@@ -74,6 +74,35 @@ export class JSContext {
 
   constructor(private tab: Tab) {
     this.ctx = vm.createContext({
+      // A minimal fetch: our URL layer supplies cookies and returns body text.
+      // Response status, headers, streaming, and CORS aren't implemented yet.
+      fetch: async (input: string, init: { method?: string; body?: string | null } = {}) => {
+        const url = this.tab.url.resolve(input);
+        if (url.scheme !== "http" && url.scheme !== "https") {
+          throw new TypeError("fetch only supports HTTP and HTTPS");
+        }
+        const method = (init.method ?? "GET").toUpperCase();
+        const body = init.body == null ? undefined : init.body;
+        if ((method === "GET" || method === "HEAD") && body !== undefined) {
+          throw new TypeError("GET and HEAD requests cannot have a body");
+        }
+        const out = await url.request({ method, body });
+        let bodyUsed = false;
+        const read = () => {
+          if (bodyUsed) {
+            throw new TypeError("Response body has already been read");
+          }
+          bodyUsed = true;
+          return out;
+        };
+        return {
+          get bodyUsed() {
+            return bodyUsed;
+          },
+          text: async () => read(),
+          json: async () => JSON.parse(read()),
+        };
+      },
       console: { log: (x: unknown) => console.log(x) },
       document: {
         querySelectorAll: (selectorText: string) => {
