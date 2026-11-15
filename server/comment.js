@@ -20,8 +20,10 @@ for (var i = 0; i < inputs.length; i++) {
 }
 
 const form = document.querySelectorAll("form")[0];
-form.addEventListener("submit", function (event) {
-  if (!allow_submit) {
-    event.preventDefault();
-  }
-});
+if (form) {
+  form.addEventListener("submit", function (event) {
+    if (!allow_submit) {
+      event.preventDefault();
+    }
+  });
+}

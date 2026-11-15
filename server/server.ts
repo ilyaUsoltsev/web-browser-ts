@@ -9,10 +9,22 @@
 //   npm run server     start on http://localhost:8000/
 
 import express from "express";
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 
 const PORT = 8000;
 
-const ENTRIES: string[] = ["Pavel was here"];
+const LOGINS = new Map([
+  ["crashoverride", "0cool"],
+  ["cerealkiller", "emmanuel"],
+]);
+const ENTRIES: [string, string][] = [
+  ["No names. We are nameless!", "cerealkiller"],
+  ["HACK THE PLANET!!!", "crashoverride"],
+];
+
+type Session = { user?: string };
+type FormParams = Record<string, unknown>;
+const SESSIONS = new Map<string, Session>();
 
 // Our browser has no entity support yet, but escaping keeps guests from
 // injecting markup into the page.
@@ -20,27 +32,55 @@ function escapeHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-function showComments(): string {
+function showComments(session: Session): string {
   let out = "<!doctype html>";
   out += "<link rel=stylesheet href=/comment.css>";
-  for (const entry of ENTRIES) {
-    out += `<p>${escapeHtml(entry)}</p>`;
+  for (const [entry, who] of ENTRIES) {
+    out += `<p>${escapeHtml(entry)}\n<i>by ${escapeHtml(who)}</i></p>`;
   }
-  out += "<form action=add method=post>";
-  out += "<p><input name=guest></p>";
-  out += '<p><button type="submit">Sign the book!</button></p>';
-  out += "</form>";
+  if (session.user) {
+    out += `<h1>Hello, ${escapeHtml(session.user)}</h1>`;
+    out += "<form action=add method=post>";
+    out += "<p><input name=guest></p>";
+    out += '<p><button type="submit">Sign the book!</button></p>';
+    out += "</form>";
+  } else {
+    out += "<a href=/login>Sign in to write in the guest book</a>";
+  }
   // Empty until comment.js writes a warning into it.
   out += "<strong></strong>";
   out += "<script src=/comment.js></script>";
   return out;
 }
 
-function addEntry(params: Record<string, string | undefined>): string {
-  if (params.guest) {
-    ENTRIES.push(params.guest);
+function addEntry(session: Session, params: FormParams): string {
+  if (session.user && typeof params.guest === "string" && params.guest.length <= 100) {
+    ENTRIES.push([params.guest, session.user]);
   }
-  return showComments();
+  return showComments(session);
+}
+
+function loginForm(_session: Session): string {
+  return (
+    "<!doctype html><form action=/ method=post>" +
+    "<p>Username: <input name=username></p>" +
+    "<p>Password: <input name=password type=password></p>" +
+    "<p><button>Log in</button></p></form>"
+  );
+}
+
+function doLogin(session: Session, params: FormParams): [number, string] {
+  const username = typeof params.username === "string" ? params.username : "";
+  const password = typeof params.password === "string" ? params.password : "";
+  const expected = LOGINS.get(username);
+  // Compare fixed-length digests without an early exit on password characters.
+  const digest = (value: string) => createHash("sha256").update(value).digest();
+  const matches = timingSafeEqual(digest(password), digest(expected ?? ""));
+  if (expected !== undefined && typeof params.password === "string" && matches) {
+    session.user = username;
+    return [200, showComments(session)];
+  }
+  return [401, `<!doctype html><h1>Invalid password for ${escapeHtml(username)}</h1>`];
 }
 
 function notFound(url: string, method: string): string {
@@ -48,6 +88,25 @@ function notFound(url: string, method: string): string {
 }
 
 const app = express();
+
+// Cookies carry only an opaque identifier; user data stays on the server.
+app.use((req, res, next) => {
+  const tokenCookie = req.headers.cookie
+    ?.split(";")
+    .map((cookie) => cookie.trim())
+    .find((cookie) => cookie.startsWith("token="));
+  let token = tokenCookie?.slice("token=".length);
+  let session = token ? SESSIONS.get(token) : undefined;
+  if (!session) {
+    // 256 cryptographically random bits, represented as a decimal number.
+    token = BigInt(`0x${randomBytes(32).toString("hex")}`).toString();
+    session = {};
+    SESSIONS.set(token, session);
+    res.cookie("token", token, { httpOnly: true, sameSite: "lax", path: "/" });
+  }
+  res.locals.session = session;
+  next();
+});
 
 // Parses `application/x-www-form-urlencoded` bodies (what our browser's
 // submitForm sends) into req.body — the book's form_decode(), including
@@ -57,11 +116,20 @@ app.use(express.urlencoded({ extended: false }));
 // These routes are the book's do_request(): pick a handler by method and URL.
 // res.send() defaults to "200 OK".
 app.get("/", (_req, res) => {
-  res.send(showComments());
+  res.send(showComments(res.locals.session));
+});
+
+app.get("/login", (_req, res) => {
+  res.send(loginForm(res.locals.session));
+});
+
+app.post("/", (req, res) => {
+  const [status, body] = doLogin(res.locals.session, req.body ?? {});
+  res.status(status).send(body);
 });
 
 app.post("/add", (req, res) => {
-  res.send(addEntry(req.body as Record<string, string | undefined>));
+  res.send(addEntry(res.locals.session, req.body ?? {}));
 });
 
 // The page's script and style sheet, read from next to this file.
