@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import * as net from "node:net";
 import type { AddressInfo } from "node:net";
 import { parseUrl, show } from "../src/url.ts";
+import { COOKIE_JAR } from "../src/cookie-jar.ts";
 
 test("parses an http URL with default port", () => {
   const url = parseUrl("http://example.org/index.html");
@@ -117,4 +118,33 @@ test("show() prints text with tags removed", (t) => {
   show("<html><body><p>Hello, <b>world</b>!</p></body></html>");
   t.mock.restoreAll();
   assert.equal(written.join(""), "Hello, world!");
+});
+
+test("cookies persist across URL instances, replace previous cookies, and stay host-specific", async () => {
+  COOKIE_JAR.clear();
+  try {
+    const first = await serve([
+      Buffer.from("HTTP/1.0 200 OK\r\nSet-Cookie: token=first; Path=/; HttpOnly\r\n\r\nWelcome"),
+    ]);
+    await parseUrl(`http://127.0.0.1:${first.port}/cookies`).request();
+    assert.equal(COOKIE_JAR.get("127.0.0.1"), "token=first");
+    assert.doesNotMatch(await first.requestText, /Cookie:/);
+
+    const second = await serve([
+      Buffer.from("HTTP/1.0 200 OK\r\nset-cookie: token=second; SameSite=Lax\r\n\r\nLogged in"),
+    ]);
+    // The same path must reach the network even though the first GET was made.
+    assert.equal(await parseUrl(`http://127.0.0.1:${second.port}/cookies`).request(), "Logged in");
+    assert.match(await second.requestText, /\r\nCookie: token=first\r\n/);
+    assert.equal(COOKIE_JAR.get("127.0.0.1"), "token=second");
+
+    COOKIE_JAR.set("other.example", "token=unrelated");
+    const third = await serve([Buffer.from("HTTP/1.0 200 OK\r\n\r\nPosted")]);
+    await parseUrl(`http://127.0.0.1:${third.port}/add`).request({ method: "POST", body: "guest=Hi" });
+    const request = await third.requestText;
+    assert.match(request, /\r\nCookie: token=second\r\n/);
+    assert.doesNotMatch(request, /unrelated|HttpOnly|SameSite|Path=/);
+  } finally {
+    COOKIE_JAR.clear();
+  }
 });

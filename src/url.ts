@@ -1,5 +1,6 @@
 import responseCache from "./response-cache.ts";
 import { Socket } from "./socket.ts";
+import { COOKIE_JAR } from "./cookie-jar.ts";
 
 function split1(s: string, sep: string): [string, string] {
   const i = s.indexOf(sep);
@@ -32,7 +33,8 @@ async function networkRequest(
 ): ReturnType<SchemeStrategy["request"]> {
   const method = options?.method ?? "GET";
   // Only GET responses are cacheable; a POST must always reach the server.
-  const cacheable = method === "GET";
+  const cookie = COOKIE_JAR.get(url.host);
+  const cacheable = method === "GET" && cookie === undefined;
   if (cacheable) {
     const cachedResponse = responseCache.get(url.host + url.path);
     if (cachedResponse) {
@@ -49,6 +51,9 @@ async function networkRequest(
   request += `Connection: close\r\n`;
   request += `User-Agent: web-browser-ts/1.0\r\n`;
   request += `Host: ${url.host}\r\n`;
+  if (cookie !== undefined) {
+    request += `Cookie: ${cookie}\r\n`;
+  }
   if (options?.body !== undefined) {
     request += `Content-Type: application/x-www-form-urlencoded\r\n`;
     request += `Content-Length: ${Buffer.byteLength(options.body)}\r\n`;
@@ -76,15 +81,21 @@ async function networkRequest(
     responseHeaders.set(header.toLowerCase(), value.trim());
   }
 
+  const setCookie = responseHeaders.get("set-cookie");
+  if (setCookie !== undefined) {
+    // Attributes such as Path, HttpOnly, and SameSite aren't request cookies.
+    COOKIE_JAR.set(url.host, setCookie.split(";", 1)[0]!.trim());
+  }
+
   if (responseHeaders.has("location")) {
     const location = responseHeaders.get("location")!;
     socket.destroy(url.host);
-    return networkRequest(parseUrl(location), url.scheme === "https");
+    return url.resolve(location).request();
   }
 
   socket.destroy(url.host);
 
-  if (cacheable) {
+  if (cacheable && setCookie === undefined) {
     responseCache.set(url.host + url.path, body);
   }
 
