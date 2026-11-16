@@ -26,10 +26,14 @@ type Session = { user?: string; nonce?: string };
 type FormParams = Record<string, unknown>;
 const SESSIONS = new Map<string, Session>();
 
-// Our browser has no entity support yet, but escaping keeps guests from
-// injecting markup into the page.
+// Encode user text before inserting it into HTML, like Python's html.escape.
 function escapeHtml(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#x27;");
 }
 
 function nonceInput(session: Session): string {
