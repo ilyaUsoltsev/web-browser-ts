@@ -22,7 +22,7 @@ const ENTRIES: [string, string][] = [
   ["HACK THE PLANET!!!", "crashoverride"],
 ];
 
-type Session = { user?: string };
+type Session = { user?: string; nonce?: string };
 type FormParams = Record<string, unknown>;
 const SESSIONS = new Map<string, Session>();
 
@@ -30,6 +30,23 @@ const SESSIONS = new Map<string, Session>();
 // injecting markup into the page.
 function escapeHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function nonceInput(session: Session): string {
+  // One active form per session, as in the book. Each new form replaces it.
+  session.nonce = randomBytes(32).toString("hex");
+  return `<input name=nonce type=hidden value=${session.nonce}>`;
+}
+
+function consumeNonce(session: Session, params: FormParams): boolean {
+  if (!session.nonce || typeof params.nonce !== "string" || !/^[0-9a-f]{64}$/.test(params.nonce)) {
+    return false;
+  }
+  if (!timingSafeEqual(Buffer.from(session.nonce, "hex"), Buffer.from(params.nonce, "hex"))) {
+    return false;
+  }
+  delete session.nonce;
+  return true;
 }
 
 function showComments(session: Session): string {
@@ -41,6 +58,7 @@ function showComments(session: Session): string {
   if (session.user) {
     out += `<h1>Hello, ${escapeHtml(session.user)}</h1>`;
     out += "<form action=add method=post>";
+    out += nonceInput(session);
     out += "<p><input name=guest></p>";
     out += '<p><button type="submit">Sign the book!</button></p>';
     out += "</form>";
@@ -60,9 +78,10 @@ function addEntry(session: Session, params: FormParams): string {
   return showComments(session);
 }
 
-function loginForm(_session: Session): string {
+function loginForm(session: Session): string {
   return (
     "<!doctype html><form action=/ method=post>" +
+    nonceInput(session) +
     "<p>Username: <input name=username></p>" +
     "<p>Password: <input name=password type=password></p>" +
     "<p><button>Log in</button></p></form>"
@@ -121,6 +140,15 @@ app.get("/", (_req, res) => {
 
 app.get("/login", (_req, res) => {
   res.send(loginForm(res.locals.session));
+});
+
+// Both forms require a secret issued to this session before changing state.
+app.post(["/", "/add"], (req, res, next) => {
+  if (!consumeNonce(res.locals.session, req.body ?? {})) {
+    res.status(403).send("<!doctype html><h1>Invalid or expired form</h1>");
+    return;
+  }
+  next();
 });
 
 app.post("/", (req, res) => {
