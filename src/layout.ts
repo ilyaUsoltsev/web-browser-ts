@@ -150,6 +150,9 @@ export class BlockLayout {
   }
 
   input(node: Element): void {
+    if (node.attributes.type === "hidden") {
+      return;
+    }
     const w = INPUT_WIDTH_PX;
     if (this.cursorX + w > this.width) {
       this.newLine();
@@ -358,6 +361,9 @@ export class InputLayout {
       }
     }
     const color = this.node.style["color"] ?? "black";
+    if (this.node.attributes.type === "password") {
+      text = "*".repeat(text.length);
+    }
     cmds.push(new DrawText(this.x, this.y, text, this.font, color));
     if (this.node.isFocused) {
       const cx = this.x + this.font.measure(text);

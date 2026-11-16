@@ -81,6 +81,7 @@ function addEntry(session: Session, params: FormParams): string {
 function loginForm(session: Session): string {
   return (
     "<!doctype html><form action=/ method=post>" +
+    "<h1>Log in</h1>" +
     nonceInput(session) +
     "<p>Username: <input name=username></p>" +
     "<p>Password: <input name=password type=password></p>" +
