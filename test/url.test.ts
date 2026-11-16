@@ -3,12 +3,74 @@ import assert from "node:assert/strict";
 import * as net from "node:net";
 import type { AddressInfo } from "node:net";
 import { parseUrl, show } from "../src/url.ts";
-import { COOKIE_JAR } from "../src/cookie-jar.ts";
+import { COOKIE_JAR, parseCookie } from "../src/cookie-jar.ts";
+
+test("cookie attributes are parsed case-insensitively and preserve the cookie value", () => {
+  const cookie = parseCookie("token=AbC=123; SameSite = LaX; HttpOnly; Path=/");
+  assert.equal(cookie.value, "token=AbC=123");
+  assert.equal(cookie.params.get("samesite"), "lax");
+  assert.equal(cookie.params.get("httponly"), "true");
+});
+
+test("SameSite Lax blocks cross-host POST cookies; None and unspecified allow them", async () => {
+  const cases = [
+    {
+      attribute: "; SameSite=Lax",
+      method: "POST",
+      referrer: "http://attacker.example/",
+      sent: false,
+    },
+    {
+      attribute: "; SameSite=Lax",
+      method: "GET",
+      referrer: "http://attacker.example/",
+      sent: true,
+    },
+    {
+      attribute: "; SameSite=Lax",
+      method: "POST",
+      referrer: "https://127.0.0.1:9999/",
+      sent: true,
+    },
+    { attribute: "; SameSite=Lax", method: "POST", referrer: undefined, sent: true },
+    {
+      attribute: "; SameSite=None",
+      method: "POST",
+      referrer: "http://attacker.example/",
+      sent: true,
+    },
+    { attribute: "", method: "POST", referrer: "http://attacker.example/", sent: true },
+  ];
+  try {
+    for (const [i, entry] of cases.entries()) {
+      COOKIE_JAR.set("127.0.0.1", parseCookie("token=secret" + entry.attribute));
+      const { port, requestText } = await serve([Buffer.from("HTTP/1.0 200 OK\r\n\r\nOK")]);
+      await parseUrl(`http://127.0.0.1:${port}/samesite-${i}`).request({
+        method: entry.method,
+        referrer: entry.referrer ? parseUrl(entry.referrer) : undefined,
+      });
+      const wire = await requestText;
+      assert.equal(wire.includes("Cookie: token=secret\r\n"), entry.sent, JSON.stringify(entry));
+      assert.doesNotMatch(wire, /SameSite=/);
+    }
+  } finally {
+    COOKIE_JAR.clear();
+  }
+});
 
 test("origins compare scheme, case-insensitive hostname, and effective port", () => {
-  assert.equal(parseUrl("http://EXAMPLE.org/a").origin(), parseUrl("http://example.org:80/b").origin());
-  assert.notEqual(parseUrl("https://example.org/").origin(), parseUrl("http://example.org/").origin());
-  assert.notEqual(parseUrl("http://example.org:8000/").origin(), parseUrl("http://example.org:8001/").origin());
+  assert.equal(
+    parseUrl("http://EXAMPLE.org/a").origin(),
+    parseUrl("http://example.org:80/b").origin(),
+  );
+  assert.notEqual(
+    parseUrl("https://example.org/").origin(),
+    parseUrl("http://example.org/").origin(),
+  );
+  assert.notEqual(
+    parseUrl("http://example.org:8000/").origin(),
+    parseUrl("http://example.org:8001/").origin(),
+  );
   assert.notEqual(parseUrl("http://other.org/").origin(), parseUrl("http://example.org/").origin());
 });
 
@@ -134,7 +196,7 @@ test("cookies persist across URL instances, replace previous cookies, and stay h
       Buffer.from("HTTP/1.0 200 OK\r\nSet-Cookie: token=first; Path=/; HttpOnly\r\n\r\nWelcome"),
     ]);
     await parseUrl(`http://127.0.0.1:${first.port}/cookies`).request();
-    assert.equal(COOKIE_JAR.get("127.0.0.1"), "token=first");
+    assert.equal(COOKIE_JAR.get("127.0.0.1")?.value, "token=first");
     assert.doesNotMatch(await first.requestText, /Cookie:/);
 
     const second = await serve([
@@ -143,11 +205,14 @@ test("cookies persist across URL instances, replace previous cookies, and stay h
     // The same path must reach the network even though the first GET was made.
     assert.equal(await parseUrl(`http://127.0.0.1:${second.port}/cookies`).request(), "Logged in");
     assert.match(await second.requestText, /\r\nCookie: token=first\r\n/);
-    assert.equal(COOKIE_JAR.get("127.0.0.1"), "token=second");
+    assert.equal(COOKIE_JAR.get("127.0.0.1")?.value, "token=second");
 
-    COOKIE_JAR.set("other.example", "token=unrelated");
+    COOKIE_JAR.set("other.example", parseCookie("token=unrelated"));
     const third = await serve([Buffer.from("HTTP/1.0 200 OK\r\n\r\nPosted")]);
-    await parseUrl(`http://127.0.0.1:${third.port}/add`).request({ method: "POST", body: "guest=Hi" });
+    await parseUrl(`http://127.0.0.1:${third.port}/add`).request({
+      method: "POST",
+      body: "guest=Hi",
+    });
     const request = await third.requestText;
     assert.match(request, /\r\nCookie: token=second\r\n/);
     assert.doesNotMatch(request, /unrelated|HttpOnly|SameSite|Path=/);

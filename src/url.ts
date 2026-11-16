@@ -1,6 +1,6 @@
 import responseCache from "./response-cache.ts";
 import { Socket } from "./socket.ts";
-import { COOKIE_JAR } from "./cookie-jar.ts";
+import { COOKIE_JAR, parseCookie } from "./cookie-jar.ts";
 
 function split1(s: string, sep: string): [string, string] {
   const i = s.indexOf(sep);
@@ -15,6 +15,7 @@ interface RequestOptions {
   body?: string;
   // Only script fetches set this; navigation and subresources remain unrestricted.
   requiredOrigin?: string;
+  referrer?: URL;
 }
 
 interface SchemeStrategy {
@@ -38,7 +39,7 @@ async function networkRequest(
   secure: boolean,
   options?: RequestOptions,
 ): ReturnType<SchemeStrategy["request"]> {
-  const method = options?.method ?? "GET";
+  const method = (options?.method ?? "GET").toUpperCase();
   // Only GET responses are cacheable; a POST must always reach the server.
   const cookie = COOKIE_JAR.get(url.host);
   const cacheable = method === "GET" && cookie === undefined;
@@ -58,8 +59,15 @@ async function networkRequest(
   request += `Connection: close\r\n`;
   request += `User-Agent: web-browser-ts/1.0\r\n`;
   request += `Host: ${url.host}\r\n`;
-  if (cookie !== undefined) {
-    request += `Cookie: ${cookie}\r\n`;
+  // Book model: host equality defines same-site; missing SameSite means None.
+  const allowCookie =
+    !cookie ||
+    cookie.params.get("samesite") !== "lax" ||
+    method === "GET" ||
+    !options?.referrer ||
+    url.host.toLowerCase() === options.referrer.host.toLowerCase();
+  if (cookie && allowCookie) {
+    request += `Cookie: ${cookie.value}\r\n`;
   }
   if (options?.body !== undefined) {
     request += `Content-Type: application/x-www-form-urlencoded\r\n`;
@@ -91,13 +99,15 @@ async function networkRequest(
   const setCookie = responseHeaders.get("set-cookie");
   if (setCookie !== undefined) {
     // Attributes such as Path, HttpOnly, and SameSite aren't request cookies.
-    COOKIE_JAR.set(url.host, setCookie.split(";", 1)[0]!.trim());
+    COOKIE_JAR.set(url.host, parseCookie(setCookie));
   }
 
   if (responseHeaders.has("location")) {
     const location = responseHeaders.get("location")!;
     socket.destroy(url.host);
-    return url.resolve(location).request({ requiredOrigin: options?.requiredOrigin });
+    return url
+      .resolve(location)
+      .request({ requiredOrigin: options?.requiredOrigin, referrer: options?.referrer });
   }
 
   socket.destroy(url.host);

@@ -42,10 +42,14 @@ right {
 }
 
 input {
-    font-size: 16px; font-weight: normal; font-style: normal;
-    background-color: lightblue;
+  font-size: 16px;
+  font-weight: normal;
+  font-style: normal;
+  background-color: lightblue;
 }
 button {
-    font-size: 16px; font-weight: normal; font-style: normal;
-    background-color: orange;
+  font-size: 16px;
+  font-weight: normal;
+  font-style: normal;
+  background-color: orange;
 }

@@ -155,12 +155,13 @@ export class Tab {
   }
 
   async load(url: URL, options?: { method?: string; body?: string }): Promise<void> {
+    const referrer = this.url;
     this.js = new JSContext(this);
     this.history.push(url);
     this.url = url;
     this.scroll = 0;
     this.focus = null;
-    const body = await url.request(options);
+    const body = await url.request({ ...options, referrer });
     if (url.skipParsing) {
       // this.layout = layout(body, this.width);
     } else {
@@ -189,7 +190,7 @@ export class Tab {
         const scriptUrl = url.resolve(script);
         let code: string;
         try {
-          code = await scriptUrl.request();
+          code = await scriptUrl.request({ referrer: url });
         } catch {
           // Like a missing stylesheet, a missing script shouldn't stop the page.
           continue;
@@ -212,7 +213,7 @@ export class Tab {
       for (const link of links) {
         const linkUrl = url.resolve(link);
         try {
-          const cssFile = await linkUrl.request();
+          const cssFile = await linkUrl.request({ referrer: url });
           rules.push(...new CSSParser(cssFile).parse());
         } catch {
           // An unavailable stylesheet should not prevent the page from loading.

@@ -69,9 +69,7 @@ test("percentage font sizes resolve to px before being inherited", () => {
   const root = new Element("html", {}, null, [h1]);
   h1.parent = root;
   code.parent = h1;
-  style(root, [
-    { selector: new CSSParser("h1").selector(), body: { "font-size": "150%" } },
-  ]);
+  style(root, [{ selector: new CSSParser("h1").selector(), body: { "font-size": "150%" } }]);
   assert.equal(h1.style["font-size"], "24px");
   assert.equal(code.style["font-size"], "24px");
 });
@@ -83,7 +81,9 @@ test("percentage font size on the root is relative to the default font size", ()
 });
 
 test("comments are skipped like whitespace", () => {
-  const rules = new CSSParser("/* top */ h1 /* a */ { color: /* b */ red; /* c */ } /* end").parse();
+  const rules = new CSSParser(
+    "/* top */ h1 /* a */ { color: /* b */ red; /* c */ } /* end",
+  ).parse();
   assert.equal(rules.length, 1);
   assert.deepEqual(rules[0]!.body, { color: "red" });
 });
