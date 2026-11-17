@@ -1,6 +1,6 @@
 import type { CanvasRenderingContext2D } from "skia-canvas";
 import type { LayoutObject } from "./layout.ts";
-import type { URL } from "./url.ts";
+import { parseUrl, type URL } from "./url.ts";
 import { treeToList } from "./utils.ts";
 import { CSSParser, DEFAULT_STYLE_SHEET, style } from "./css-parser.ts";
 import { Parser } from "./parser.ts";
@@ -23,6 +23,11 @@ export class Tab {
   history: URL[] = [];
   rootElement: Element | null = null;
   rules: Rule[] = [];
+  allowedOrigins: string[] | null = null;
+
+  allowedRequest(url: URL): boolean {
+    return this.allowedOrigins === null || this.allowedOrigins.includes(url.origin());
+  }
   // The text entry (if any) that receives key presses sent to this tab.
   focus: Element | null = null;
   // The current page's JS environment; a new page gets a fresh one.
@@ -161,7 +166,16 @@ export class Tab {
     this.url = url;
     this.scroll = 0;
     this.focus = null;
-    const body = await url.request({ ...options, referrer });
+    const { headers, body } = await url.request({ ...options, referrer });
+    this.allowedOrigins = null;
+    const csp = headers.get("content-security-policy");
+    const directive = csp?.split(";").map(part => part.trim().split(/\s+/))
+      .find(parts => parts[0] === "default-src");
+    if (directive) {
+      this.allowedOrigins = directive.slice(1)
+        .filter(source => source.startsWith("http://") || source.startsWith("https://"))
+        .map(source => parseUrl(source).origin());
+    }
     if (url.skipParsing) {
       // this.layout = layout(body, this.width);
     } else {
@@ -188,9 +202,13 @@ export class Tab {
 
       for (const script of scripts) {
         const scriptUrl = url.resolve(script);
+        if (!this.allowedRequest(scriptUrl)) {
+          console.log("Blocked script", script, "due to CSP");
+          continue;
+        }
         let code: string;
         try {
-          code = await scriptUrl.request({ referrer: url });
+          code = (await scriptUrl.request({ referrer: url, allowedOrigins: this.allowedOrigins })).body;
         } catch {
           // Like a missing stylesheet, a missing script shouldn't stop the page.
           continue;
@@ -212,8 +230,12 @@ export class Tab {
 
       for (const link of links) {
         const linkUrl = url.resolve(link);
+        if (!this.allowedRequest(linkUrl)) {
+          console.log("Blocked stylesheet", link, "due to CSP");
+          continue;
+        }
         try {
-          const cssFile = await linkUrl.request({ referrer: url });
+          const { body: cssFile } = await linkUrl.request({ referrer: url, allowedOrigins: this.allowedOrigins });
           rules.push(...new CSSParser(cssFile).parse());
         } catch {
           // An unavailable stylesheet should not prevent the page from loading.

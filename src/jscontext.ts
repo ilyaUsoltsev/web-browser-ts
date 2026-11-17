@@ -86,10 +86,14 @@ export class JSContext {
         if ((method === "GET" || method === "HEAD") && body !== undefined) {
           throw new TypeError("GET and HEAD requests cannot have a body");
         }
-        const out = await url.request({
+        if (!this.tab.allowedRequest(url)) {
+          throw new TypeError("Fetch blocked by CSP");
+        }
+        const { body: out } = await url.request({
           method,
           body,
           requiredOrigin: this.tab.url.origin(),
+          allowedOrigins: this.tab.allowedOrigins,
           referrer: this.tab.url,
         });
         let bodyUsed = false;

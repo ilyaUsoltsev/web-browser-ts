@@ -72,6 +72,7 @@ function showComments(session: Session): string {
   // Empty until comment.js writes a warning into it.
   out += "<strong></strong>";
   out += "<script src=/comment.js></script>";
+  out += "<script src=https://example.com/evil.js></script>";
   return out;
 }
 
@@ -112,6 +113,10 @@ function notFound(url: string, method: string): string {
 }
 
 const app = express();
+app.use((_req, res, next) => {
+  res.setHeader("Content-Security-Policy", `default-src http://localhost:${PORT}`);
+  next();
+});
 
 // Cookies carry only an opaque identifier; user data stays on the server.
 app.use((req, res, next) => {

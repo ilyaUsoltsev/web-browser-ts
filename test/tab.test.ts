@@ -12,7 +12,7 @@ import { InputLayout, type LayoutObject } from "../src/layout.ts";
 
 function page(html: string) {
   const url = parseUrl("file:///test/page.html");
-  url.request = async () => html;
+  url.request = async () => ({ headers: new Map(), body: html });
   return url;
 }
 

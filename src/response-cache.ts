@@ -1,11 +1,13 @@
-class ResponseCache {
-  private cache: Map<string, string> = new Map();
+import type { Response } from "./url.ts";
 
-  get(url: string): string | undefined {
+class ResponseCache {
+  private cache: Map<string, Response> = new Map();
+
+  get(url: string): Response | undefined {
     return this.cache.get(url);
   }
 
-  set(url: string, response: string): void {
+  set(url: string, response: Response): void {
     this.cache.set(url, response);
   }
 

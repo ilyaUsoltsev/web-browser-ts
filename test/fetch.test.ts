@@ -47,7 +47,7 @@ test("fetch rejects different origins and cross-origin redirects before sending 
       "allowed",
     );
     // Navigation still follows cross-origin redirects.
-    assert.equal(await parseUrl(base + "/redirect").request(), "private data");
+    assert.equal((await parseUrl(base + "/redirect").request()).body, "private data");
     assert.equal(foreignRequests, 1);
     // A cached response from navigation cannot bypass the fetch policy.
     await assert.rejects(

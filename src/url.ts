@@ -10,12 +10,18 @@ function split1(s: string, sep: string): [string, string] {
   return [s.slice(0, i), s.slice(i + sep.length)];
 }
 
+export interface Response {
+  headers: Map<string, string>;
+  body: string;
+}
+
 interface RequestOptions {
   method?: string;
   body?: string;
   // Only script fetches set this; navigation and subresources remain unrestricted.
   requiredOrigin?: string;
   referrer?: URL;
+  allowedOrigins?: readonly string[] | null;
 }
 
 interface SchemeStrategy {
@@ -24,7 +30,7 @@ interface SchemeStrategy {
   // Returns the part of the url after the scheme prefix, or undefined if
   // this strategy doesn't own that prefix.
   match(url: string): string | undefined;
-  request(url: URL, options?: RequestOptions): Promise<string>;
+  request(url: URL, options?: RequestOptions): Promise<Response>;
 }
 
 function matchSchemePrefix(url: string, scheme: string): string | undefined {
@@ -107,16 +113,16 @@ async function networkRequest(
     socket.destroy(url.host);
     return url
       .resolve(location)
-      .request({ requiredOrigin: options?.requiredOrigin, referrer: options?.referrer });
+      .request({ requiredOrigin: options?.requiredOrigin, referrer: options?.referrer, allowedOrigins: options?.allowedOrigins });
   }
 
   socket.destroy(url.host);
 
   if (cacheable && setCookie === undefined) {
-    responseCache.set(url.origin() + url.path, body);
+    responseCache.set(url.origin() + url.path, { headers: responseHeaders, body });
   }
 
-  return body;
+  return { headers: responseHeaders, body };
 }
 
 // Registry of known strategies, consulted only by parseUrl() below — URL
@@ -127,7 +133,7 @@ const SCHEMES: SchemeStrategy[] = [
     defaultPort: 0,
     match: (url) => (url.startsWith("data:") ? url.slice("data:".length) : undefined),
     request: (url) => {
-      return Promise.resolve(url.path.split(",")[1] ?? "<p>No data</p>");
+      return Promise.resolve({ headers: new Map(), body: url.path.split(",")[1] ?? "<p>No data</p>" });
     },
   },
   {
@@ -146,7 +152,7 @@ const SCHEMES: SchemeStrategy[] = [
     name: "file",
     defaultPort: 0, // file URLs don't use a network port
     match: (url) => matchSchemePrefix(url, "file"),
-    request: (url) => url.openFile(),
+    request: async (url) => ({ headers: new Map(), body: await url.openFile() }),
   },
 ];
 
@@ -186,7 +192,10 @@ export class URL {
   }
 
   // async because socket I/O in Node can't block; callers must await it.
-  async request(options?: RequestOptions): Promise<string> {
+  async request(options?: RequestOptions): Promise<Response> {
+    if (options?.allowedOrigins && !options.allowedOrigins.includes(this.origin())) {
+      throw new TypeError("Request blocked by CSP");
+    }
     // Check before cache access or network I/O, including each redirect hop.
     if (options?.requiredOrigin !== undefined && this.origin() !== options.requiredOrigin) {
       throw new TypeError("Cross-origin fetch request not allowed");
@@ -249,7 +258,7 @@ export function parseUrl(url: string): URL {
         name: "unknown",
         defaultPort: 0,
         match: () => undefined,
-        request: () => Promise.resolve("<p>Smth went wrong</p>"),
+        request: () => Promise.resolve({ headers: new Map(), body: "<p>Smth went wrong</p>" }),
       },
       "",
       0,
@@ -294,6 +303,6 @@ export function show(body: string): void {
 }
 
 export async function load(url: URL): Promise<void> {
-  const body = await url.request();
+  const { body } = await url.request();
   show(body);
 }
