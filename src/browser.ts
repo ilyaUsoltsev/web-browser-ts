@@ -148,7 +148,7 @@ export class Browser {
     this.activeTab?.draw(ctx, this.chrome.bottom);
 
     for (const cmd of this.chrome.paint()) {
-      cmd.execute(0, ctx);
+      cmd.execute(ctx);
     }
   }
 }

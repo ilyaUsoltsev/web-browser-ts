@@ -273,6 +273,10 @@ export class Tab {
     if (this.height <= 0) {
       return;
     }
+    // Commands paint in page coordinates; shift the canvas so the scrolled-to
+    // part of the page lands just below the chrome.
+    ctx.save();
+    ctx.translate(0, offset - this.scroll);
     for (const cmd of this.displayList) {
       if (cmd.rect.top > this.scroll + this.height) {
         continue;
@@ -280,8 +284,9 @@ export class Tab {
       if (cmd.rect.bottom < this.scroll) {
         continue;
       }
-      cmd.execute(this.scroll - offset, ctx);
+      cmd.execute(ctx);
     }
+    ctx.restore();
 
     // Add scrollbar
     ctx.fillStyle = "gray";

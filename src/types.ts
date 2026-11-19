@@ -11,7 +11,7 @@ export interface DrawCommand {
   rect: Rect;
   top: number;
   bottom: number;
-  execute(scroll: number, canvas: CanvasRenderingContext2D): void;
+  execute(canvas: CanvasRenderingContext2D): void;
 }
 
 export type Rule = { selector: Selector; body: Record<string, string> };

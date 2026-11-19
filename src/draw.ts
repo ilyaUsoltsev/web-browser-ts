@@ -32,12 +32,12 @@ export class DrawText extends RectCommand implements DrawCommand {
     this.color = color;
   }
 
-  execute(scroll: number, canvas: CanvasRenderingContext2D): void {
+  execute(canvas: CanvasRenderingContext2D): void {
     canvas.font = this.font.css;
     canvas.fillStyle = this.color;
     // `top` is the top of the line box, like Tk's anchor="nw"
     canvas.textBaseline = "alphabetic";
-    canvas.fillText(this.text, this.left, this.top + this.font.ascent - scroll);
+    canvas.fillText(this.text, this.left, this.top + this.font.ascent);
   }
 }
 
@@ -49,9 +49,9 @@ export class DrawRect extends RectCommand implements DrawCommand {
     super(rect);
   }
 
-  execute(scroll: number, canvas: CanvasRenderingContext2D): void {
+  execute(canvas: CanvasRenderingContext2D): void {
     canvas.fillStyle = this.color;
-    canvas.fillRect(this.left, this.top - scroll, this.right - this.left, this.bottom - this.top);
+    canvas.fillRect(this.left, this.top, this.right - this.left, this.bottom - this.top);
   }
 }
 
@@ -64,10 +64,10 @@ export class DrawOutline extends RectCommand implements DrawCommand {
     super(rect);
   }
 
-  execute(scroll: number, canvas: CanvasRenderingContext2D): void {
+  execute(canvas: CanvasRenderingContext2D): void {
     canvas.strokeStyle = this.color;
     canvas.lineWidth = this.thickness;
-    canvas.strokeRect(this.left, this.top - scroll, this.right - this.left, this.bottom - this.top);
+    canvas.strokeRect(this.left, this.top, this.right - this.left, this.bottom - this.top);
   }
 }
 
@@ -83,12 +83,12 @@ export class DrawLine extends RectCommand implements DrawCommand {
     super(new Rect(x1, y1, x2, y2));
   }
 
-  execute(scroll: number, canvas: CanvasRenderingContext2D): void {
+  execute(canvas: CanvasRenderingContext2D): void {
     canvas.strokeStyle = this.color;
     canvas.lineWidth = this.thickness;
     canvas.beginPath();
-    canvas.moveTo(this.left, this.top - scroll);
-    canvas.lineTo(this.right, this.bottom - scroll);
+    canvas.moveTo(this.left, this.top);
+    canvas.lineTo(this.right, this.bottom);
     canvas.stroke();
   }
 }

@@ -123,8 +123,9 @@ test("tab drawing offsets page commands and culls outside its viewport", () => {
       rect: new Rect(0, 30, 10, 40),
       top: 30,
       bottom: 40,
-      execute: (scroll) => {
-        scrolls.push(scroll);
+      execute: (ctx) => {
+        // The tab translates the canvas by (offset - scroll) instead.
+        scrolls.push(-ctx.getTransform().f);
       },
     },
     {
