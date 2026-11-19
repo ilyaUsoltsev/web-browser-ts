@@ -15,6 +15,8 @@ import { JSContext } from "./jscontext.ts";
 export class Tab {
   displayList: DrawCommand[] = [];
   totalHeight = 0;
+  // Set when the display list changes; the browser re-rasters the tab surface.
+  needsRaster = true;
   document!: DocumentLayout;
   scroll = 0;
   scrollbarHeight = 0;
@@ -267,28 +269,25 @@ export class Tab {
     paintTree(this.document, this.displayList);
     this.totalHeight = this.document.height + 2 * VSTEP;
     this.scroll = Math.min(this.scroll, Math.max(0, this.totalHeight - this.height));
+    // The display list changed, so the browser's tab surface is stale.
+    this.needsRaster = true;
   }
 
-  draw(ctx: CanvasRenderingContext2D, offset = 0): void {
+  // Paint the whole page, in page coordinates, onto a page-sized surface.
+  // Scrolling doesn't re-raster: the browser just shifts where it copies the
+  // surface to (compositing).
+  raster(ctx: CanvasRenderingContext2D): void {
+    for (const cmd of this.displayList) {
+      cmd.execute(ctx);
+    }
+  }
+
+  // Depends on the scroll position, so it's drawn at composite time, on top
+  // of the tab surface, not baked into it.
+  drawScrollbar(ctx: CanvasRenderingContext2D, offset = 0): void {
     if (this.height <= 0) {
       return;
     }
-    // Commands paint in page coordinates; shift the canvas so the scrolled-to
-    // part of the page lands just below the chrome.
-    ctx.save();
-    ctx.translate(0, offset - this.scroll);
-    for (const cmd of this.displayList) {
-      if (cmd.rect.top > this.scroll + this.height) {
-        continue;
-      }
-      if (cmd.rect.bottom < this.scroll) {
-        continue;
-      }
-      cmd.execute(ctx);
-    }
-    ctx.restore();
-
-    // Add scrollbar
     ctx.fillStyle = "gray";
     if (this.totalHeight <= this.height) {
       return;

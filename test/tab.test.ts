@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { Canvas, type Window } from "skia-canvas";
+import { Canvas, type CanvasRenderingContext2D, type Window } from "skia-canvas";
 import { Browser } from "../src/browser.ts";
 import { Tab } from "../src/tab.ts";
 import { parseUrl } from "../src/url.ts";
@@ -63,12 +63,13 @@ test("browser activates new tabs and draws only the active page", async () => {
   assert.equal(second.height, 150 - browser.chrome.bottom);
   let firstDraws = 0;
   let secondDraws = 0;
-  first.draw = () => {
+  first.raster = () => {
     firstDraws++;
   };
-  second.draw = () => {
+  second.raster = () => {
     secondDraws++;
   };
+  second.needsRaster = true;
   browser.draw();
   assert.equal(firstDraws, 0);
   assert.equal(secondDraws, 1);
@@ -112,34 +113,61 @@ test("rectangles exclude their right and bottom edges", () => {
   assert.ok(!rect.containsPoint(10, 40));
 });
 
-test("tab drawing offsets page commands and culls outside its viewport", () => {
+test("tab rasters the whole page in page coordinates and sizes its scrollbar", () => {
   const tab = new Tab(400, 100);
   tab.totalHeight = 300;
   tab.scroll = 20;
-  const canvas = new Canvas(400, 150);
-  const scrolls: number[] = [];
-  tab.displayList = [
-    {
-      rect: new Rect(0, 30, 10, 40),
-      top: 30,
-      bottom: 40,
-      execute: (ctx) => {
-        // The tab translates the canvas by (offset - scroll) instead.
-        scrolls.push(-ctx.getTransform().f);
-      },
+  const canvas = new Canvas(400, 300);
+  const executed: [number, number][] = [];
+  const command = (top: number) => ({
+    rect: new Rect(0, top, 10, top + 10),
+    top,
+    bottom: top + 10,
+    execute: (ctx: CanvasRenderingContext2D) => {
+      executed.push([top, ctx.getTransform().f]);
     },
-    {
-      rect: new Rect(0, 130, 10, 140),
-      top: 130,
-      bottom: 140,
-      execute: () => {
-        assert.fail("culled command executed");
-      },
-    },
-  ];
-  tab.draw(canvas.getContext("2d"), 35);
-  assert.deepEqual(scrolls, [-15]);
+  });
+  // Off-screen commands are rastered too: the surface covers the whole page.
+  tab.displayList = [command(30), command(230)];
+  tab.raster(canvas.getContext("2d"));
+  assert.deepEqual(executed, [
+    [30, 0],
+    [230, 0],
+  ]);
+  tab.drawScrollbar(canvas.getContext("2d"), 35);
   assert.equal(tab.scrollbarHeight, 100 / 3);
+});
+
+test("scrolling re-composites without re-rastering the tab or chrome", async () => {
+  const browser = new Browser();
+  const canvas = new Canvas(400, 150);
+  browser.window = { width: 400, height: 150, ctx: canvas.getContext("2d") } as Window;
+  await browser.newTab(page("<p>a</p>".repeat(50)));
+  const tab = browser.activeTab!;
+  let tabRasters = 0;
+  let chromeRasters = 0;
+  const raster = tab.raster.bind(tab);
+  tab.raster = (ctx) => {
+    tabRasters++;
+    raster(ctx);
+  };
+  const rasterChrome = browser.rasterChrome.bind(browser);
+  browser.rasterChrome = () => {
+    chromeRasters++;
+    rasterChrome();
+  };
+
+  tab.scrolldown();
+  browser.draw();
+  assert.ok(tab.scroll > 0);
+  assert.equal(tabRasters, 0);
+  assert.equal(chromeRasters, 0);
+
+  // A new layout (e.g. a DOM change) makes the tab surface stale.
+  tab.layout();
+  browser.draw();
+  assert.equal(tabRasters, 1);
+  assert.equal(chromeRasters, 0);
 });
 
 test("clicking an input clears and focuses it, and key presses edit its value", async () => {

@@ -32,6 +32,10 @@ export const HEIGHT = 600;
 export const HSTEP = 10;
 export const VSTEP = 18;
 export const SCROLL_STEP = 100;
+// Device pixels per CSS pixel for offscreen surfaces. skia-canvas's Window
+// doesn't expose the screen's devicePixelRatio, so assume a 2x (Retina)
+// display; rastering at 1x and stretching onto a 2x screen looks blurry.
+export const DEVICE_SCALE = 2;
 export const LINE_HEIGHT_PADDING = 1;
 export const LINE_HEIGHT_MULTIPLIER = 1;
 
