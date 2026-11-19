@@ -39,6 +39,9 @@ export function style(node: Token, rules: Rule[]): void {
   }
 }
 
+const NAME_CHARS = /[a-zA-Z0-9_%-]/;
+const VALUE_CHARS = /[a-zA-Z0-9_%#.-]/;
+
 export class CSSParser {
   constructor(
     private text: string,
@@ -59,9 +62,12 @@ export class CSSParser {
     }
   }
 
-  word() {
+  // Names (tags, properties) vs values: values may also contain "#" and "."
+  // (hex colors like #00000080, decimals like 0.5), but a selector like
+  // ".class" must stay unparseable so the rule is skipped.
+  word(chars: RegExp = NAME_CHARS) {
     let start = this.position;
-    while (this.position < this.text.length && /[a-zA-Z0-9_%-]/.test(this.text[this.position]!)) {
+    while (this.position < this.text.length && chars.test(this.text[this.position]!)) {
       this.position++;
     }
     if (this.position === start) {
@@ -83,7 +89,7 @@ export class CSSParser {
     this.whitespace();
     this.literal(":");
     this.whitespace();
-    const value = this.word();
+    const value = this.word(VALUE_CHARS);
     return { property, value };
   }
 

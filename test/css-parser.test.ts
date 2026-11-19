@@ -87,3 +87,11 @@ test("comments are skipped like whitespace", () => {
   assert.equal(rules.length, 1);
   assert.deepEqual(rules[0]!.body, { color: "red" });
 });
+
+test("CSS values may contain # and . (hex colors with alpha, decimals)", () => {
+  assert.deepEqual(new CSSParser("color: #00000080; background-color: #f00; opacity: 0.5").body(), {
+    color: "#00000080",
+    "background-color": "#f00",
+    opacity: "0.5",
+  });
+});
