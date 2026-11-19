@@ -4,11 +4,16 @@ import { Canvas, type CanvasRenderingContext2D, type Window } from "skia-canvas"
 import { Browser } from "../src/browser.ts";
 import { Tab } from "../src/tab.ts";
 import { parseUrl } from "../src/url.ts";
-import { DrawLine, DrawText } from "../src/draw.ts";
+import { DrawLine, DrawText, Opacity } from "../src/draw.ts";
 import { Rect } from "../src/rect.ts";
+import type { DrawCommand } from "../src/types.ts";
 import { treeToList } from "../src/utils.ts";
 import { Element, Text } from "../src/tokens.ts";
 import { InputLayout, type LayoutObject } from "../src/layout.ts";
+
+// The display list is a tree (effects wrap their subtree): flatten it.
+const allCommands = (displayList: DrawCommand[]) =>
+  displayList.flatMap((cmd) => treeToList(cmd, [])).filter((cmd) => !(cmd instanceof Opacity));
 
 function page(html: string) {
   const url = parseUrl("file:///test/page.html");
@@ -30,7 +35,10 @@ test("tabs load and scroll independently without owning a window", async () => {
   assert.equal(first.scroll, 0);
   assert.notEqual(first.document, second.document);
   assert.notEqual(first.displayList, second.displayList);
-  assert.equal(second.displayList.filter((cmd) => cmd instanceof DrawText)[0]!.text, "second");
+  assert.equal(
+    allCommands(second.displayList).filter((cmd) => cmd instanceof DrawText)[0]!.text,
+    "second",
+  );
 });
 
 test("tab clicks use page coordinates and navigate relative links", async () => {
@@ -123,6 +131,7 @@ test("tab rasters the whole page in page coordinates and sizes its scrollbar", (
     rect: new Rect(0, top, 10, top + 10),
     top,
     bottom: top + 10,
+    children: [],
     execute: (ctx: CanvasRenderingContext2D) => {
       executed.push([top, ctx.getTransform().f]);
     },
@@ -189,15 +198,17 @@ test("clicking an input clears and focuses it, and key presses edit its value", 
   tab.keypress("i");
   assert.equal(input.node.attributes["value"], "hi");
   // Rerendered: the new layout tree paints the typed text plus a cursor line.
-  assert.ok(tab.displayList.some((cmd) => cmd instanceof DrawText && cmd.text === "hi"));
-  assert.ok(tab.displayList.some((cmd) => cmd instanceof DrawLine));
+  assert.ok(
+    allCommands(tab.displayList).some((cmd) => cmd instanceof DrawText && cmd.text === "hi"),
+  );
+  assert.ok(allCommands(tab.displayList).some((cmd) => cmd instanceof DrawLine));
 
   // Blurring (e.g. on Enter) unfocuses the input but keeps its value.
   tab.blur();
   assert.equal(tab.focus, null);
   assert.equal((input.node as Element).isFocused, false);
   assert.equal(input.node.attributes["value"], "hi");
-  assert.ok(!tab.displayList.some((cmd) => cmd instanceof DrawLine));
+  assert.ok(!allCommands(tab.displayList).some((cmd) => cmd instanceof DrawLine));
 
   // Refocus, then clicking elsewhere on the page unfocuses the input and removes its cursor.
   await browser.click(input.x + 1, input.y + 1 + browser.chrome.bottom);
@@ -206,7 +217,7 @@ test("clicking an input clears and focuses it, and key presses edit its value", 
   await browser.click(390, 290);
   assert.equal(tab.focus, null);
   assert.equal((input.node as Element).isFocused, false);
-  assert.ok(!tab.displayList.some((cmd) => cmd instanceof DrawLine));
+  assert.ok(!allCommands(tab.displayList).some((cmd) => cmd instanceof DrawLine));
   tab.keypress("x");
   assert.equal(input.node.attributes["value"], "hi");
 

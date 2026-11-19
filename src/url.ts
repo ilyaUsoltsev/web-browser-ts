@@ -113,7 +113,11 @@ async function networkRequest(
     socket.destroy(url.host);
     return url
       .resolve(location)
-      .request({ requiredOrigin: options?.requiredOrigin, referrer: options?.referrer, allowedOrigins: options?.allowedOrigins });
+      .request({
+        requiredOrigin: options?.requiredOrigin,
+        referrer: options?.referrer,
+        allowedOrigins: options?.allowedOrigins,
+      });
   }
 
   socket.destroy(url.host);
@@ -133,7 +137,10 @@ const SCHEMES: SchemeStrategy[] = [
     defaultPort: 0,
     match: (url) => (url.startsWith("data:") ? url.slice("data:".length) : undefined),
     request: (url) => {
-      return Promise.resolve({ headers: new Map(), body: url.path.split(",")[1] ?? "<p>No data</p>" });
+      return Promise.resolve({
+        headers: new Map(),
+        body: url.path.split(",")[1] ?? "<p>No data</p>",
+      });
     },
   },
   {

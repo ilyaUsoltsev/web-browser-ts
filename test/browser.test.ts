@@ -1,11 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { BlockLayout, DocumentLayout, paintTree } from "../src/layout.ts";
-import { DrawRect, DrawText } from "../src/draw.ts";
+import { DrawRect, DrawText, Opacity } from "../src/draw.ts";
 import { getFont } from "../src/fonts.ts";
 import { Text, Element } from "../src/tokens.ts";
 import { DEFAULT_STYLE_SHEET, style } from "../src/css-parser.ts";
-import { cascadePriority } from "../src/utils.ts";
+import { cascadePriority, treeToList } from "../src/utils.ts";
 import {
   DEFAULT_FONT_SIZE,
   HSTEP,
@@ -14,6 +14,11 @@ import {
   WIDTH,
 } from "../src/constants.ts";
 import type { DrawCommand } from "../src/types.ts";
+
+// The display list is a tree (effects wrap their subtree): flatten it to
+// just the drawing commands, in paint order.
+const drawingCommands = (tree: DrawCommand[]) =>
+  tree.flatMap((cmd) => treeToList(cmd, [])).filter((cmd) => !(cmd instanceof Opacity));
 
 const el = (name: string, ...children: (Text | Element)[]) => {
   const element = new Element(name, {}, null, children);
@@ -30,9 +35,9 @@ function render(root: Element, width = WIDTH) {
   );
   const document = new DocumentLayout(root);
   document.layout(width);
-  const displayList: DrawCommand[] = [];
-  paintTree(document, displayList);
-  return { document, displayList };
+  const tree: DrawCommand[] = [];
+  paintTree(document, tree);
+  return { document, tree, displayList: drawingCommands(tree) };
 }
 
 const texts = (displayList: DrawCommand[]) =>
@@ -161,4 +166,21 @@ test("<right> aligns its line to the right edge", () => {
 test("small shrinks its text via the stylesheet", () => {
   const { displayList } = render(el("body", el("small", new Text("tiny"))));
   assert.equal(texts(displayList)[0]!.font, getFont(DEFAULT_FONT_SIZE * 0.9, "normal", "normal"));
+});
+
+test("opacity wraps an element's whole painted subtree in one Opacity command", () => {
+  const faded = el("div", el("b", new Text("hi")));
+  faded.attributes["style"] = "opacity: 0.5";
+  const { tree } = render(el("body", faded));
+  const layers = tree
+    .flatMap((cmd) => treeToList(cmd, []))
+    .filter((cmd): cmd is Opacity => cmd instanceof Opacity && cmd.opacity < 1);
+  assert.equal(layers.length, 1);
+  // The nested <b>'s text is inside the layer, so it fades with its parent.
+  const inside = drawingCommands(layers[0]!.children);
+  assert.deepEqual(
+    texts(inside).map((cmd) => cmd.text),
+    ["hi"],
+  );
+  assert.ok(!layers[0]!.rect.isEmpty());
 });

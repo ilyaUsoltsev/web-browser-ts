@@ -12,7 +12,7 @@ import {
 } from "./constants.ts";
 import { type Token, Text, Element } from "./tokens.ts";
 import { type Font, getFont } from "./fonts.ts";
-import { DrawLine, DrawRect, DrawText } from "./draw.ts";
+import { DrawLine, DrawRect, DrawText, Opacity } from "./draw.ts";
 
 /** Font for a node's computed style. Needed both when wrapping words (BlockLayout)
  *  and when positioning them (TextLayout/InputLayout), so it lives in one place. */
@@ -51,6 +51,11 @@ export class DocumentLayout {
 
   paint(): DrawCommand[] {
     return [];
+  }
+
+  // Not an element box (or anonymous): no visual effects of its own.
+  paintEffects(cmds: DrawCommand[]): DrawCommand[] {
+    return cmds;
   }
 
   shouldPaint(): boolean {
@@ -200,18 +205,39 @@ export class BlockLayout {
     return cmds;
   }
 
+  paintEffects(cmds: DrawCommand[]): DrawCommand[] {
+    return paintVisualEffects(this.node, cmds, this.selfRect());
+  }
+
   shouldPaint() {
     return this.node instanceof Text || (this.node.name != "input" && this.node.name != "button");
   }
 }
 
+// Paints the object's subtree, wrapped in the object's visual effects, onto
+// the end of `displayList`.
 export function paintTree(layoutObject: LayoutObject, displayList: DrawCommand[]): void {
-  if (layoutObject.shouldPaint()) {
-    displayList.push(...layoutObject.paint());
-  }
+  const cmds = paintSubtree(layoutObject);
+  // Effects wrap the finished subtree, so they apply to the children too, not
+  // just this object's own background.
+  displayList.push(...(layoutObject.shouldPaint() ? layoutObject.paintEffects(cmds) : cmds));
+}
+
+// The object's own commands followed by all its descendants', in paint order.
+function paintSubtree(layoutObject: LayoutObject): DrawCommand[] {
+  const cmds = layoutObject.shouldPaint() ? layoutObject.paint() : [];
   for (const child of layoutObject.children) {
-    paintTree(child, displayList);
+    paintTree(child, cmds);
   }
+  return cmds;
+}
+
+// Wraps an element's painted subtree in its visual effects. Shared by every
+// layout object that paints an element box.
+export function paintVisualEffects(node: Token, cmds: DrawCommand[], _rect: Rect): DrawCommand[] {
+  const parsed = parseFloat(node.style["opacity"] ?? "1");
+  const opacity = Number.isNaN(parsed) ? 1 : Math.min(1, Math.max(0, parsed));
+  return [new Opacity(opacity, cmds)];
 }
 
 export class TextLayout {
@@ -245,6 +271,11 @@ export class TextLayout {
   paint(): DrawCommand[] {
     const color = this.node.style["color"] ?? "black";
     return [new DrawText(this.x, this.y, this.word, this.font, color)];
+  }
+
+  // Not an element box (or anonymous): no visual effects of its own.
+  paintEffects(cmds: DrawCommand[]): DrawCommand[] {
+    return cmds;
   }
 
   shouldPaint(): boolean {
@@ -306,6 +337,11 @@ export class LineLayout {
 
   paint(): DrawCommand[] {
     return [];
+  }
+
+  // Not an element box (or anonymous): no visual effects of its own.
+  paintEffects(cmds: DrawCommand[]): DrawCommand[] {
+    return cmds;
   }
 
   shouldPaint(): boolean {
@@ -370,6 +406,10 @@ export class InputLayout {
       cmds.push(new DrawLine(cx, this.y, cx, this.y + this.height, "black", 1));
     }
     return cmds;
+  }
+
+  paintEffects(cmds: DrawCommand[]): DrawCommand[] {
+    return paintVisualEffects(this.node, cmds, this.selfRect());
   }
 
   shouldPaint(): boolean {

@@ -171,12 +171,15 @@ export class Tab {
     const { headers, body } = await url.request({ ...options, referrer });
     this.allowedOrigins = null;
     const csp = headers.get("content-security-policy");
-    const directive = csp?.split(";").map(part => part.trim().split(/\s+/))
-      .find(parts => parts[0] === "default-src");
+    const directive = csp
+      ?.split(";")
+      .map((part) => part.trim().split(/\s+/))
+      .find((parts) => parts[0] === "default-src");
     if (directive) {
-      this.allowedOrigins = directive.slice(1)
-        .filter(source => source.startsWith("http://") || source.startsWith("https://"))
-        .map(source => parseUrl(source).origin());
+      this.allowedOrigins = directive
+        .slice(1)
+        .filter((source) => source.startsWith("http://") || source.startsWith("https://"))
+        .map((source) => parseUrl(source).origin());
     }
     if (url.skipParsing) {
       // this.layout = layout(body, this.width);
@@ -210,7 +213,8 @@ export class Tab {
         }
         let code: string;
         try {
-          code = (await scriptUrl.request({ referrer: url, allowedOrigins: this.allowedOrigins })).body;
+          code = (await scriptUrl.request({ referrer: url, allowedOrigins: this.allowedOrigins }))
+            .body;
         } catch {
           // Like a missing stylesheet, a missing script shouldn't stop the page.
           continue;
@@ -237,7 +241,10 @@ export class Tab {
           continue;
         }
         try {
-          const { body: cssFile } = await linkUrl.request({ referrer: url, allowedOrigins: this.allowedOrigins });
+          const { body: cssFile } = await linkUrl.request({
+            referrer: url,
+            allowedOrigins: this.allowedOrigins,
+          });
           rules.push(...new CSSParser(cssFile).parse());
         } catch {
           // An unavailable stylesheet should not prevent the page from loading.
