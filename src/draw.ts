@@ -57,6 +57,23 @@ export class DrawRect extends RectCommand implements DrawCommand {
   }
 }
 
+export class DrawRRect extends DrawRect {
+  constructor(rect: Rect, color: string, public radius: number) {
+    super(rect, color);
+  }
+
+  override execute(canvas: CanvasRenderingContext2D): void {
+    if (this.rect.isEmpty()) {
+      return;
+    }
+    canvas.fillStyle = this.color;
+    canvas.beginPath();
+    // roundRect scales overlapping corner radii down to fit the box.
+    canvas.roundRect(this.left, this.top, this.right - this.left, this.bottom - this.top, this.radius);
+    canvas.fill();
+  }
+}
+
 export class DrawOutline extends RectCommand implements DrawCommand {
   constructor(
     rect: Rect,

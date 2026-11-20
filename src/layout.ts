@@ -12,7 +12,12 @@ import {
 } from "./constants.ts";
 import { type Token, Text, Element } from "./tokens.ts";
 import { type Font, getFont } from "./fonts.ts";
-import { Blend, DrawLine, DrawRect, DrawText, Opacity } from "./draw.ts";
+import { Blend, DrawLine, DrawRect, DrawRRect, DrawText, Opacity } from "./draw.ts";
+
+function background(node: Token, rect: Rect, color: string): DrawRect {
+  const radius = Math.max(0, parseFloat(node.style["border-radius"] ?? "0") || 0);
+  return radius > 0 ? new DrawRRect(rect, color, radius) : new DrawRect(rect, color);
+}
 
 /** Font for a node's computed style. Needed both when wrapping words (BlockLayout)
  *  and when positioning them (TextLayout/InputLayout), so it lives in one place. */
@@ -200,7 +205,7 @@ export class BlockLayout {
         ? (this.node.style["background-color"] ?? "transparent")
         : "transparent";
     if (bgcolor !== "transparent") {
-      cmds.push(new DrawRect(this.selfRect(), bgcolor));
+      cmds.push(background(this.node, this.selfRect(), bgcolor));
     }
     return cmds;
   }
@@ -384,7 +389,7 @@ export class InputLayout {
     const cmds: DrawCommand[] = [];
     const bgColor = this.node.style["background-color"] ?? "transparent";
     if (bgColor !== "transparent") {
-      cmds.push(new DrawRect(this.selfRect(), bgColor));
+      cmds.push(background(this.node, this.selfRect(), bgColor));
     }
     let text = "";
     if (this.node.name === "input") {

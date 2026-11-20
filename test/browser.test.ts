@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { BlockLayout, DocumentLayout, paintTree } from "../src/layout.ts";
-import { Blend, DrawRect, DrawText, Opacity } from "../src/draw.ts";
+import { Blend, DrawRect, DrawRRect, DrawText, Opacity } from "../src/draw.ts";
 import { Canvas } from "skia-canvas";
 import { Rect } from "../src/rect.ts";
 import { getFont } from "../src/fonts.ts";
@@ -217,5 +217,31 @@ test("blend modes composite pixels against the backdrop after applying opacity",
     assert.equal(pixel[3], 255);
     assert.equal(ctx.globalAlpha, 1);
     assert.equal(ctx.globalCompositeOperation, "source-over");
+  }
+});
+
+test("border-radius paints blocks and controls without changing their text layout", () => {
+  const input = el("input");
+  input.attributes.style = "background-color: blue; border-radius: 8px";
+  const block = el("div", new Text("Rounded"), input);
+  block.attributes.style = "background-color: orange; border-radius: 10px; opacity: 0.5";
+  const { displayList } = render(el("body", block));
+  const rounded = displayList.filter((cmd): cmd is DrawRRect => cmd instanceof DrawRRect);
+  assert.equal(rounded.length, 2);
+  assert.equal(rounded[0]!.radius, 10);
+  assert.equal(rounded[1]!.radius, 8);
+  assert.equal(rounded[1]!.color, "blue");
+  assert.ok(texts(displayList).some(cmd => cmd.text === "Rounded"));
+});
+
+test("rounded rectangle pixels have transparent corners and radii scale to fit", () => {
+  for (const radius of [10, 1000]) {
+    const canvas = new Canvas(20, 20);
+    const ctx = canvas.getContext("2d");
+    const rect = new Rect(0, 0, 20, 20);
+    new DrawRRect(rect, "red"(radius, rect)!).execute(ctx);
+    assert.equal(ctx.getImageData(0, 0, 1, 1).data[3], 0, String(radius));
+    assert.equal(ctx.getImageData(10, 10, 1, 1).data[3], 255, String(radius));
+    assert.equal(ctx.getImageData(10, 1, 1, 1).data[0], 255, String(radius));
   }
 });
