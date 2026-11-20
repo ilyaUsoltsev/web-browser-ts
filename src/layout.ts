@@ -12,7 +12,7 @@ import {
 } from "./constants.ts";
 import { type Token, Text, Element } from "./tokens.ts";
 import { type Font, getFont } from "./fonts.ts";
-import { Blend, DrawLine, DrawRect, DrawRRect, DrawText, Opacity } from "./draw.ts";
+import { Blend, DrawLine, DrawRect, DrawRRect, DrawText } from "./draw.ts";
 
 function background(node: Token, rect: Rect, color: string): DrawRect {
   const radius = Math.max(0, parseFloat(node.style["border-radius"] ?? "0") || 0);
@@ -243,12 +243,19 @@ export function paintVisualEffects(node: Token, cmds: DrawCommand[], rect: Rect)
   const parsed = parseFloat(node.style["opacity"] ?? "1");
   const opacity = Number.isNaN(parsed) ? 1 : Math.min(1, Math.max(0, parsed));
   const clip = node.style["overflow"] === "clip";
+  let blendMode = node.style["mix-blend-mode"];
+  if (blendMode === "normal") {
+    blendMode = undefined;
+  }
   if (clip) {
     const radius = Math.max(0, parseFloat(node.style["border-radius"] ?? "0") || 0);
-    cmds = [...cmds, new Blend("destination-in", [new DrawRRect(rect, "white", radius)])];
+    cmds = [...cmds, new Blend(1, "destination-in", [new DrawRRect(rect, "white", radius)])];
   }
-  // Even at full opacity, isolate the mask so it only erases this subtree.
-  return [new Blend(node.style["mix-blend-mode"], [new Opacity(opacity, cmds, clip)])];
+  // Explicit source-over forces isolation for clipping, even at full opacity.
+  if (clip && !blendMode) {
+    blendMode = "source-over";
+  }
+  return [new Blend(opacity, blendMode, cmds)];
 }
 
 export class TextLayout {

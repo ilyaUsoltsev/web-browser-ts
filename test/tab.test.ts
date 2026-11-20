@@ -4,7 +4,7 @@ import { Canvas, type CanvasRenderingContext2D, type Window } from "skia-canvas"
 import { Browser } from "../src/browser.ts";
 import { Tab } from "../src/tab.ts";
 import { parseUrl } from "../src/url.ts";
-import { DrawLine, DrawText, Opacity } from "../src/draw.ts";
+import { DrawLine, DrawText, Blend } from "../src/draw.ts";
 import { Rect } from "../src/rect.ts";
 import type { DrawCommand } from "../src/types.ts";
 import { treeToList } from "../src/utils.ts";
@@ -13,7 +13,7 @@ import { InputLayout, type LayoutObject } from "../src/layout.ts";
 
 // The display list is a tree (effects wrap their subtree): flatten it.
 const allCommands = (displayList: DrawCommand[]) =>
-  displayList.flatMap((cmd) => treeToList(cmd, [])).filter((cmd) => !(cmd instanceof Opacity));
+  displayList.flatMap((cmd) => treeToList(cmd, [])).filter((cmd) => !(cmd instanceof Blend));
 
 function page(html: string) {
   const url = parseUrl("file:///test/page.html");

@@ -119,13 +119,13 @@ const LAYER_PADDING = 4;
 // Draws its children as one group, then blends that group into the parent at
 // `opacity`. Unlike a translucent color, overlapping children don't show
 // through each other: they're flattened first, then made transparent.
-export class Opacity implements DrawCommand {
+export class Blend implements DrawCommand {
   rect: Rect;
 
   constructor(
     public opacity: number,
+    public blendMode: string | undefined,
     public children: DrawCommand[],
-    public forceLayer = false,
   ) {
     this.rect = children.reduce((rect, cmd) => rect.union(cmd.rect), new Rect(0, 0, 0, 0));
   }
@@ -137,9 +137,12 @@ export class Opacity implements DrawCommand {
     return this.rect.bottom;
   }
 
+  get shouldSave(): boolean {
+    return Boolean(this.blendMode) || this.opacity < 1;
+  }
+
   execute(ctx: CanvasRenderingContext2D): void {
-    // Fully opaque: no layer needed, draw straight into the parent.
-    if (this.opacity >= 1 && !this.forceLayer) {
+    if (!this.shouldSave) {
       for (const cmd of this.children) {
         cmd.execute(ctx);
       }
@@ -148,14 +151,10 @@ export class Opacity implements DrawCommand {
     if (this.opacity <= 0 || this.rect.isEmpty()) {
       return;
     }
-    this.paintLayer(ctx, this.opacity, "source-over");
+    this.paintLayer(ctx);
   }
 
-  protected paintLayer(
-    ctx: CanvasRenderingContext2D,
-    opacity: number,
-    mode: "source-over" | "multiply" | "difference" | "destination-in",
-  ): void {
+  private paintLayer(ctx: CanvasRenderingContext2D): void {
     if (this.rect.isEmpty()) {
       return;
     }
@@ -177,8 +176,8 @@ export class Opacity implements DrawCommand {
 
     // Blend the layer into the parent (saveLayer's restore()).
     ctx.save();
-    ctx.globalAlpha *= opacity;
-    ctx.globalCompositeOperation = mode;
+    ctx.globalAlpha *= this.opacity;
+    ctx.globalCompositeOperation = parseBlendMode(this.blendMode);
     ctx.drawImage(layer, left, top, width, height);
     ctx.restore();
   }
@@ -188,19 +187,3 @@ export function parseBlendMode(mode?: string): "source-over" | "multiply" | "dif
   return mode === "multiply" || mode === "difference" || mode === "destination-in" ? mode : "source-over";
 }
 
-// Blend the flattened subtree against the existing backdrop. Normal blending
-// draws directly, preserving the backdrop for any nested blending children.
-export class Blend extends Opacity {
-  constructor(public blendMode: string | undefined, children: DrawCommand[]) {
-    super(1, children);
-  }
-
-  override execute(ctx: CanvasRenderingContext2D): void {
-    const mode = parseBlendMode(this.blendMode);
-    if (mode === "source-over") {
-      super.execute(ctx);
-    } else {
-      this.paintLayer(ctx, 1, mode);
-    }
-  }
-}

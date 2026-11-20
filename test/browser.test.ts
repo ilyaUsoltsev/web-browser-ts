@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { BlockLayout, DocumentLayout, paintTree, paintVisualEffects } from "../src/layout.ts";
-import { Blend, DrawRect, DrawRRect, DrawText, Opacity } from "../src/draw.ts";
+import { Blend, DrawRect, DrawRRect, DrawText } from "../src/draw.ts";
 import { Canvas } from "skia-canvas";
 import { Rect } from "../src/rect.ts";
 import { getFont } from "../src/fonts.ts";
@@ -20,7 +20,7 @@ import type { DrawCommand } from "../src/types.ts";
 // The display list is a tree (effects wrap their subtree): flatten it to
 // just the drawing commands, in paint order.
 const drawingCommands = (tree: DrawCommand[]) =>
-  tree.flatMap((cmd) => treeToList(cmd, [])).filter((cmd) => !(cmd instanceof Opacity));
+  tree.flatMap((cmd) => treeToList(cmd, [])).filter((cmd) => !(cmd instanceof Blend));
 
 const el = (name: string, ...children: (Text | Element)[]) => {
   const element = new Element(name, {}, null, children);
@@ -170,13 +170,13 @@ test("small shrinks its text via the stylesheet", () => {
   assert.equal(texts(displayList)[0]!.font, getFont(DEFAULT_FONT_SIZE * 0.9, "normal", "normal"));
 });
 
-test("opacity wraps an element's whole painted subtree in one Opacity command", () => {
+test("opacity wraps an element's whole painted subtree in one Blend command", () => {
   const faded = el("div", el("b", new Text("hi")));
   faded.attributes["style"] = "opacity: 0.5";
   const { tree } = render(el("body", faded));
   const layers = tree
     .flatMap((cmd) => treeToList(cmd, []))
-    .filter((cmd): cmd is Opacity => cmd instanceof Opacity && cmd.opacity < 1);
+    .filter((cmd): cmd is Blend => cmd instanceof Blend && cmd.opacity < 1);
   assert.equal(layers.length, 1);
   // The nested <b>'s text is inside the layer, so it fades with its parent.
   const inside = drawingCommands(layers[0]!.children);
@@ -187,15 +187,14 @@ test("opacity wraps an element's whole painted subtree in one Opacity command", 
   assert.ok(!layers[0]!.rect.isEmpty());
 });
 
-test("mix-blend-mode wraps opacity around the complete element subtree", () => {
+test("mix-blend-mode and opacity share one command for the complete subtree", () => {
   const child = el("div", new Text("Child"));
   child.attributes.style = "background-color: blue; mix-blend-mode: difference; opacity: 0.5";
   const { tree } = render(el("body", child));
   const blend = tree.flatMap(cmd => treeToList(cmd, []))
     .find((cmd): cmd is Blend => cmd instanceof Blend && cmd.blendMode === "difference");
   assert.ok(blend);
-  assert.ok(blend.children[0] instanceof Opacity);
-  assert.equal(blend.children[0].opacity, 0.5);
+  assert.equal(blend.opacity, 0.5);
   assert.equal(texts(drawingCommands(blend.children))[0]!.text, "Child");
 });
 
@@ -211,7 +210,7 @@ test("blend modes composite pixels against the backdrop after applying opacity",
     const ctx = canvas.getContext("2d");
     ctx.fillStyle = "orange";
     ctx.fillRect(0, 0, 20, 20);
-    new Blend(mode, [new Opacity(opacity, [new DrawRect(new Rect(2, 2, 18, 18), "blue")])]).execute(ctx);
+    new Blend(opacity, mode, [new DrawRect(new Rect(2, 2, 18, 18), "blue")]).execute(ctx);
     const pixel = ctx.getImageData(10, 10, 1, 1).data;
     expected.forEach((channel, i) => assert.ok(Math.abs(pixel[i]! - channel) <= 1, `${mode}: ${pixel}`));
     assert.equal(pixel[3], 255);
@@ -281,5 +280,34 @@ test("overflow clip with zero radius clips to a rectangle; visible overflow stay
     }
     assert.equal(ctx.getImageData(1, 1, 1, 1).data[3], overflow === "clip" ? 0 : 255);
     assert.equal(ctx.getImageData(10, 10, 1, 1).data[3], 255);
+  }
+});
+
+test("plain content allocates no effect surfaces; opacity and blending share one", (t) => {
+  const ctx = new Canvas(60, 60).getContext("2d");
+  const getContext = Canvas.prototype.getContext;
+  const surfaces = new Set<Canvas>();
+  t.mock.method(Canvas.prototype, "getContext", function (this: Canvas) {
+    surfaces.add(this);
+    return getContext.call(this, "2d");
+  });
+  const plain = render(el("body", el("div", new Text("Plain"))));
+  for (const command of plain.tree) {
+    command.execute(ctx);
+  }
+  assert.equal(surfaces.size, 0);
+  for (const [style, expected] of [
+    [{ opacity: "0.5" }, 1],
+    [{ opacity: "0.5", "mix-blend-mode": "difference" }, 1],
+    [{ overflow: "clip", opacity: "0.5" }, 2],
+  ] as const) {
+    surfaces.clear();
+    const node = el("div");
+    node.style = { ...style };
+    for (const command of paintVisualEffects(node,
+      [new DrawRect(new Rect(0, 0, 40, 40), "blue")], new Rect(0, 0, 40, 40))) {
+      command.execute(ctx);
+    }
+    assert.equal(surfaces.size, expected);
   }
 });

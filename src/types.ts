@@ -11,7 +11,7 @@ export interface DrawCommand {
   rect: Rect;
   top: number;
   bottom: number;
-  // Effects like Opacity wrap other commands, so the display list is a tree.
+  // Effects like Blend wrap other commands, so the display list is a tree.
   children: DrawCommand[];
   execute(canvas: CanvasRenderingContext2D): void;
 }
