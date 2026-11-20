@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { BlockLayout, DocumentLayout, paintTree } from "../src/layout.ts";
+import { BlockLayout, DocumentLayout, paintTree, paintVisualEffects } from "../src/layout.ts";
 import { Blend, DrawRect, DrawRRect, DrawText, Opacity } from "../src/draw.ts";
 import { Canvas } from "skia-canvas";
 import { Rect } from "../src/rect.ts";
@@ -239,9 +239,47 @@ test("rounded rectangle pixels have transparent corners and radii scale to fit",
     const canvas = new Canvas(20, 20);
     const ctx = canvas.getContext("2d");
     const rect = new Rect(0, 0, 20, 20);
-    new DrawRRect(rect, "red"(radius, rect)!).execute(ctx);
+    new DrawRRect(rect, "red", radius).execute(ctx);
     assert.equal(ctx.getImageData(0, 0, 1, 1).data[3], 0, String(radius));
     assert.equal(ctx.getImageData(10, 10, 1, 1).data[3], 255, String(radius));
     assert.equal(ctx.getImageData(10, 1, 1, 1).data[0], 255, String(radius));
+  }
+});
+
+test("overflow clip masks the subtree without erasing the backdrop, including at full opacity", () => {
+  for (const opacity of [1, 0.5]) {
+    const canvas = new Canvas(60, 60);
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "orange";
+    ctx.fillRect(0, 0, 60, 60);
+    const node = el("div");
+    node.style = { overflow: "clip", "border-radius": "10px", opacity: String(opacity) };
+    const commands = paintVisualEffects(node,
+      [new DrawRect(new Rect(0, 0, 60, 60), "blue")], new Rect(10, 10, 50, 50));
+    for (const command of commands) {
+      command.execute(ctx);
+    }
+    const pixel = (x: number, y: number) => [...ctx.getImageData(x, y, 1, 1).data];
+    assert.deepEqual(pixel(2, 2), [255, 165, 0, 255], "overflow leaves backdrop intact");
+    assert.deepEqual(pixel(10, 10), [255, 165, 0, 255], "rounded corner reveals backdrop");
+    const center = pixel(30, 30);
+    // Intermediate surfaces can introduce an extra byte of rounding.
+    assert.ok(Math.abs(center[0]! - 255 * (1 - opacity)) <= 2);
+    assert.ok(Math.abs(center[2]! - 255 * opacity) <= 1);
+    assert.equal(center[3], 255);
+  }
+});
+
+test("overflow clip with zero radius clips to a rectangle; visible overflow stays visible", () => {
+  for (const overflow of ["clip", "visible"]) {
+    const ctx = new Canvas(40, 40).getContext("2d");
+    const node = el("div");
+    node.style = { overflow };
+    for (const command of paintVisualEffects(node,
+      [new DrawRect(new Rect(0, 0, 40, 40), "blue")], new Rect(10, 10, 30, 30))) {
+      command.execute(ctx);
+    }
+    assert.equal(ctx.getImageData(1, 1, 1, 1).data[3], overflow === "clip" ? 0 : 255);
+    assert.equal(ctx.getImageData(10, 10, 1, 1).data[3], 255);
   }
 });

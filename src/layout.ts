@@ -239,10 +239,16 @@ function paintSubtree(layoutObject: LayoutObject): DrawCommand[] {
 
 // Wraps an element's painted subtree in its visual effects. Shared by every
 // layout object that paints an element box.
-export function paintVisualEffects(node: Token, cmds: DrawCommand[], _rect: Rect): DrawCommand[] {
+export function paintVisualEffects(node: Token, cmds: DrawCommand[], rect: Rect): DrawCommand[] {
   const parsed = parseFloat(node.style["opacity"] ?? "1");
   const opacity = Number.isNaN(parsed) ? 1 : Math.min(1, Math.max(0, parsed));
-  return [new Blend(node.style["mix-blend-mode"], [new Opacity(opacity, cmds)])];
+  const clip = node.style["overflow"] === "clip";
+  if (clip) {
+    const radius = Math.max(0, parseFloat(node.style["border-radius"] ?? "0") || 0);
+    cmds = [...cmds, new Blend("destination-in", [new DrawRRect(rect, "white", radius)])];
+  }
+  // Even at full opacity, isolate the mask so it only erases this subtree.
+  return [new Blend(node.style["mix-blend-mode"], [new Opacity(opacity, cmds, clip)])];
 }
 
 export class TextLayout {

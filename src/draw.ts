@@ -125,6 +125,7 @@ export class Opacity implements DrawCommand {
   constructor(
     public opacity: number,
     public children: DrawCommand[],
+    public forceLayer = false,
   ) {
     this.rect = children.reduce((rect, cmd) => rect.union(cmd.rect), new Rect(0, 0, 0, 0));
   }
@@ -138,7 +139,7 @@ export class Opacity implements DrawCommand {
 
   execute(ctx: CanvasRenderingContext2D): void {
     // Fully opaque: no layer needed, draw straight into the parent.
-    if (this.opacity >= 1) {
+    if (this.opacity >= 1 && !this.forceLayer) {
       for (const cmd of this.children) {
         cmd.execute(ctx);
       }
@@ -153,7 +154,7 @@ export class Opacity implements DrawCommand {
   protected paintLayer(
     ctx: CanvasRenderingContext2D,
     opacity: number,
-    mode: "source-over" | "multiply" | "difference",
+    mode: "source-over" | "multiply" | "difference" | "destination-in",
   ): void {
     if (this.rect.isEmpty()) {
       return;
@@ -183,8 +184,8 @@ export class Opacity implements DrawCommand {
   }
 }
 
-export function parseBlendMode(mode?: string): "source-over" | "multiply" | "difference" {
-  return mode === "multiply" || mode === "difference" ? mode : "source-over";
+export function parseBlendMode(mode?: string): "source-over" | "multiply" | "difference" | "destination-in" {
+  return mode === "multiply" || mode === "difference" || mode === "destination-in" ? mode : "source-over";
 }
 
 // Blend the flattened subtree against the existing backdrop. Normal blending
