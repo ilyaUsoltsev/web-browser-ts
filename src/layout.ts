@@ -12,7 +12,7 @@ import {
 } from "./constants.ts";
 import { type Token, Text, Element } from "./tokens.ts";
 import { type Font, getFont } from "./fonts.ts";
-import { DrawLine, DrawRect, DrawText, Opacity } from "./draw.ts";
+import { Blend, DrawLine, DrawRect, DrawText, Opacity } from "./draw.ts";
 
 /** Font for a node's computed style. Needed both when wrapping words (BlockLayout)
  *  and when positioning them (TextLayout/InputLayout), so it lives in one place. */
@@ -237,7 +237,7 @@ function paintSubtree(layoutObject: LayoutObject): DrawCommand[] {
 export function paintVisualEffects(node: Token, cmds: DrawCommand[], _rect: Rect): DrawCommand[] {
   const parsed = parseFloat(node.style["opacity"] ?? "1");
   const opacity = Number.isNaN(parsed) ? 1 : Math.min(1, Math.max(0, parsed));
-  return [new Opacity(opacity, cmds)];
+  return [new Blend(node.style["mix-blend-mode"], [new Opacity(opacity, cmds)])];
 }
 
 export class TextLayout {

@@ -1,7 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { BlockLayout, DocumentLayout, paintTree } from "../src/layout.ts";
-import { DrawRect, DrawText, Opacity } from "../src/draw.ts";
+import { Blend, DrawRect, DrawText, Opacity } from "../src/draw.ts";
+import { Canvas } from "skia-canvas";
+import { Rect } from "../src/rect.ts";
 import { getFont } from "../src/fonts.ts";
 import { Text, Element } from "../src/tokens.ts";
 import { DEFAULT_STYLE_SHEET, style } from "../src/css-parser.ts";
@@ -183,4 +185,37 @@ test("opacity wraps an element's whole painted subtree in one Opacity command", 
     ["hi"],
   );
   assert.ok(!layers[0]!.rect.isEmpty());
+});
+
+test("mix-blend-mode wraps opacity around the complete element subtree", () => {
+  const child = el("div", new Text("Child"));
+  child.attributes.style = "background-color: blue; mix-blend-mode: difference; opacity: 0.5";
+  const { tree } = render(el("body", child));
+  const blend = tree.flatMap(cmd => treeToList(cmd, []))
+    .find((cmd): cmd is Blend => cmd instanceof Blend && cmd.blendMode === "difference");
+  assert.ok(blend);
+  assert.ok(blend.children[0] instanceof Opacity);
+  assert.equal(blend.children[0].opacity, 0.5);
+  assert.equal(texts(drawingCommands(blend.children))[0]!.text, "Child");
+});
+
+test("blend modes composite pixels against the backdrop after applying opacity", () => {
+  for (const [mode, opacity, expected] of [
+    ["difference", 1, [255, 165, 255]],
+    ["multiply", 1, [0, 0, 0]],
+    ["difference", 0.5, [255, 165, 128]],
+    ["normal", 1, [0, 0, 255]],
+    ["unsupported", 1, [0, 0, 255]],
+  ] as const) {
+    const canvas = new Canvas(20, 20);
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "orange";
+    ctx.fillRect(0, 0, 20, 20);
+    new Blend(mode, [new Opacity(opacity, [new DrawRect(new Rect(2, 2, 18, 18), "blue")])]).execute(ctx);
+    const pixel = ctx.getImageData(10, 10, 1, 1).data;
+    expected.forEach((channel, i) => assert.ok(Math.abs(pixel[i]! - channel) <= 1, `${mode}: ${pixel}`));
+    assert.equal(pixel[3], 255);
+    assert.equal(ctx.globalAlpha, 1);
+    assert.equal(ctx.globalCompositeOperation, "source-over");
+  }
 });
