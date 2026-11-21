@@ -13,6 +13,7 @@ export class Browser {
   // Where key presses go: the chrome's address bar, the active tab, or nowhere.
   focus: "address bar" | "content" | null = null;
   private keepAlive = (): void => {};
+  private taskFramePending = false;
 
   // Compositing: the tab and the chrome are each rastered onto their own
   // offscreen surface; draw() just copies them onto the window. Scrolling
@@ -225,6 +226,19 @@ export class Browser {
 
     if (this.chromeSurface) {
       drawSurface(ctx, this.chromeSurface, 0, 0);
+    }
+
+    // Run one task per frame so the native loop can dispatch input between tasks.
+    if (tab?.taskRunner.hasTasks && !this.taskFramePending) {
+      this.taskFramePending = true;
+      this.window.once("frame", () => {
+        this.taskFramePending = false;
+        const activeTab = this.activeTab;
+        if (activeTab?.taskRunner.hasTasks) {
+          activeTab.taskRunner.run();
+          this.draw();
+        }
+      });
     }
   }
 }

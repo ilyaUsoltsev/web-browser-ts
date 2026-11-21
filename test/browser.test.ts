@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { EventEmitter } from "node:events";
 import { BlockLayout, DocumentLayout, paintTree, paintVisualEffects } from "../src/layout.ts";
 import { Blend, DrawRect, DrawRRect, DrawText } from "../src/draw.ts";
 import { Canvas } from "skia-canvas";
@@ -16,6 +17,46 @@ import {
   WIDTH,
 } from "../src/constants.ts";
 import type { DrawCommand } from "../src/types.ts";
+import { Browser } from "../src/browser.ts";
+import { Tab } from "../src/tab.ts";
+import { parseUrl } from "../src/url.ts";
+
+test("frames run one task at a time from the active tab", async () => {
+  const browser = new Browser();
+  const canvas = new Canvas(200, 200);
+  const window = Object.assign(new EventEmitter(), {
+    width: canvas.width,
+    height: canvas.height,
+    ctx: canvas.getContext("2d"),
+  });
+  browser.window = window as unknown as Browser["window"];
+  const first = new Tab(200, 200);
+  const second = new Tab(200, 200);
+  const page = parseUrl("data:text/html,<p>Page</p>");
+  await first.load(page);
+  await second.load(page);
+  browser.tabs.push(first, second);
+  const order: string[] = [];
+  first.taskRunner.scheduleTask(() => order.push("first"));
+  first.taskRunner.scheduleTask(() => order.push("second"));
+  second.taskRunner.scheduleTask(() => order.push("other tab"));
+
+  browser.activeTab = first;
+  browser.draw();
+  browser.draw();
+  assert.deepEqual(order, []);
+  window.emit("frame");
+  assert.deepEqual(order, ["first"]);
+  browser.activeTab = second;
+  browser.draw();
+  window.emit("frame");
+  assert.deepEqual(order, ["first", "other tab"]);
+  assert.equal(window.listenerCount("frame"), 0);
+  browser.activeTab = first;
+  browser.draw();
+  window.emit("frame");
+  assert.deepEqual(order, ["first", "other tab", "second"]);
+});
 
 // The display list is a tree (effects wrap their subtree): flatten it to
 // just the drawing commands, in paint order.

@@ -11,8 +11,10 @@ import { Text } from "./tokens.ts";
 import type { DrawCommand, Rule } from "./types.ts";
 import { cascadePriority } from "./utils.ts";
 import { JSContext } from "./jscontext.ts";
+import { TaskRunner, type Task } from "./task-runner.ts";
 
 export class Tab {
+  readonly taskRunner = new TaskRunner();
   displayList: DrawCommand[] = [];
   totalHeight = 0;
   // Set when the display list changes; the browser re-rasters the tab surface.
@@ -163,12 +165,17 @@ export class Tab {
 
   async load(url: URL, options?: { method?: string; body?: string }): Promise<void> {
     const referrer = this.url;
-    this.js = new JSContext(this);
+    const js = new JSContext(this);
+    this.js = js;
+    this.taskRunner.clear();
     this.history.push(url);
     this.url = url;
     this.scroll = 0;
     this.focus = null;
     const { headers, body } = await url.request({ ...options, referrer });
+    if (this.js !== js) {
+      return;
+    }
     this.allowedOrigins = null;
     const csp = headers.get("content-security-policy");
     const directive = csp
@@ -197,15 +204,18 @@ export class Tab {
       // Walk the tree once; scripts and stylesheets are both picked from it.
       const nodes = treeToList(root, []);
 
-      // Run the page's scripts before styling and layout. Inline scripts
-      // (<script>code</script>) aren't supported, only <script src=...>.
+      // Download external scripts in document order and queue them after rendering.
       const scripts = nodes.flatMap((child) =>
         child instanceof Element && child.name === "script" && child.attributes.src
           ? [child.attributes.src]
           : [],
       );
 
+      const scriptTasks: Task[] = [];
       for (const script of scripts) {
+        if (this.js !== js) {
+          return;
+        }
         const scriptUrl = url.resolve(script);
         if (!this.allowedRequest(scriptUrl)) {
           console.log("Blocked script", script, "due to CSP");
@@ -219,7 +229,9 @@ export class Tab {
           // Like a missing stylesheet, a missing script shouldn't stop the page.
           continue;
         }
-        console.log("Script returned: ", this.js.run(script, code));
+        scriptTasks.push(() => {
+          console.log("Script returned: ", js.run(script, code));
+        });
       }
 
       // read all css links
@@ -235,6 +247,9 @@ export class Tab {
       const rules = [...DEFAULT_STYLE_SHEET];
 
       for (const link of links) {
+        if (this.js !== js) {
+          return;
+        }
         const linkUrl = url.resolve(link);
         if (!this.allowedRequest(linkUrl)) {
           console.log("Blocked stylesheet", link, "due to CSP");
@@ -251,9 +266,15 @@ export class Tab {
         }
       }
 
+      if (this.js !== js) {
+        return;
+      }
       // Style sheets are downloaded once per load, not on every render.
       this.rules = rules.sort((a, b) => cascadePriority(a) - cascadePriority(b));
       this.render();
+      for (const task of scriptTasks) {
+        this.taskRunner.scheduleTask(task);
+      }
     }
   }
 

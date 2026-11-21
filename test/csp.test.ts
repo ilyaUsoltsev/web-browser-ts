@@ -42,8 +42,11 @@ test("CSP blocks resources, fetch, and redirect escapes and survives cached page
     const tab = new Tab();
     for (let i = 0; i < 2; i++) {
       await tab.load(parseUrl(origin + "/page"));
-      assert.equal(tab.js!.run("check", "scriptLoaded"), true);
+      assert.equal(tab.js!.run("check", "typeof scriptLoaded"), "undefined");
       assert.ok(tab.rules.some(rule => rule.body.color === "red"));
+      tab.taskRunner.run();
+      assert.equal(tab.js!.run("check", "scriptLoaded"), true);
+      assert.equal(tab.taskRunner.hasTasks, false);
       assert.equal(foreignRequests, 0);
       await assert.rejects(tab.js!.run("fetch-redirect", `fetch("/redirect")`) as Promise<unknown>, /CSP/);
     }
